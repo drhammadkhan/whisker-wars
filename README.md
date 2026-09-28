@@ -14,6 +14,7 @@ A playable browser prototype of **Whisker Wars**, a real-time god-strategy game 
 - Scrappers protect working cats, fight better in packs, and rank up as they win.
 - Fling a cat fast to toss it at a wizard.
 - To move around, drag empty ground, use WASD or the arrow keys, or drag the minimap. Scroll or pinch to zoom, press H for home and Space to pause.
+- **Music and sound** start when you press Start level. M toggles music and N toggles sound effects. Both settings are remembered, and the buttons are under Gadgets & game (in Orders on a touchscreen).
 
 ### On a phone or tablet
 
@@ -29,4 +30,4 @@ To win, topple both wizard towers. You lose if every cat uses up its nine lives,
 
 ## Tech
 
-The game is a single self-contained `index.html` using a 2D canvas, with no build step and no dependencies apart from Google Fonts. All the art is drawn in code.
+The game is a single self-contained `index.html` using a 2D canvas, with no build step and no dependencies apart from Google Fonts. All the art is drawn in code, and all the music and sound effects are synthesised live with the Web Audio API, with no audio files.

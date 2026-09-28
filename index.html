@@ -216,6 +216,10 @@ html.touch .card .go{min-height:44px}
         <button id="restartBtn">Restart</button>
         <button id="fsBtn" hidden>Full screen</button>
       </div>
+      <div class="btns">
+        <button id="musicBtn" aria-pressed="true">Music on<kbd>M</kbd></button>
+        <button id="sfxBtn" aria-pressed="true">Sound on<kbd>N</kbd></button>
+      </div>
     </section>
   </div>
 </div>
@@ -272,6 +276,207 @@ document.documentElement.classList.toggle('touch', TOUCH);
 const tx = (mouse, touch) => TOUCH ? touch : mouse;
 let UID = 0, G;
 const cam = { x: HOME.x + 140, y: HOME.y - 60, z: 1 };
+
+/* ================= audio ================= */
+// Everything is synthesised with Web Audio: no sound files. The context starts on the first tap or key press.
+const AU = { ctx: null, master: null, sfx: null, mus: null, noise: null, last: {}, opts: { music: true, sfx: true } };
+try { Object.assign(AU.opts, JSON.parse(localStorage.getItem('ww-audio') || '{}')); } catch (_) {}
+function saveAudio() { try { localStorage.setItem('ww-audio', JSON.stringify(AU.opts)); } catch (_) {} }
+function audioStart() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  if (!AU.ctx) {
+    const a = AU.ctx = new AC();
+    const comp = a.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(a.destination);
+    AU.master = a.createGain(); AU.master.gain.value = .8; AU.master.connect(comp);
+    AU.sfx = a.createGain(); AU.sfx.gain.value = AU.opts.sfx ? 1 : 0; AU.sfx.connect(AU.master);
+    AU.mus = a.createGain(); AU.mus.gain.value = AU.opts.music ? .32 : 0; AU.mus.connect(AU.master);
+    AU.noise = a.createBuffer(1, a.sampleRate, a.sampleRate);
+    const d = AU.noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    // iOS unlock: play one silent buffer inside the gesture.
+    const s = a.createBufferSource(); s.buffer = a.createBuffer(1, 1, 22050); s.connect(a.destination); s.start(0);
+    Music.init();
+  }
+  if (AU.ctx.state === 'suspended') AU.ctx.resume();
+}
+function setAudio(kind, on) {
+  AU.opts[kind] = on; saveAudio();
+  if (AU.ctx) { const g = kind === 'music' ? AU.mus : AU.sfx; g.gain.setTargetAtTime(on ? (kind === 'music' ? .32 : 1) : 0, AU.ctx.currentTime, .08); }
+  syncAudioBtns();
+}
+function syncAudioBtns() {
+  for (const k of ['music', 'sfx']) { const b = document.getElementById(k + 'Btn'); if (!b) continue; b.firstChild.textContent = (k === 'music' ? 'Music ' : 'Sound ') + (AU.opts[k] ? 'on' : 'off'); b.classList.toggle('on', AU.opts[k]); b.setAttribute('aria-pressed', AU.opts[k]); }
+}
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+// One enveloped oscillator. f can be a number or [start, end] for a glide; opts: type, v (volume), a (attack), t (start offset), lp (lowpass Hz), vib (vibrato Hz), pan, bus.
+function tone(f, dur, o = {}) {
+  const a = AU.ctx, t0 = a.currentTime + .01 + (o.t || 0), osc = a.createOscillator(), g = a.createGain();
+  osc.type = o.type || 'sine';
+  const f0 = Array.isArray(f) ? f[0] : f, f1 = Array.isArray(f) ? f[1] : f;
+  osc.frequency.setValueAtTime(f0, t0); if (f1 !== f0) osc.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+  if (o.vib) { const l = a.createOscillator(), lg = a.createGain(); l.frequency.value = o.vib; lg.gain.value = f0 * (o.vibAmt || .02); l.connect(lg); lg.connect(osc.frequency); l.start(t0); l.stop(t0 + dur + .1); }
+  const v = o.v ?? .3, at = o.a ?? .005;
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(v, t0 + at); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  let node = osc;
+  if (o.lp) { const fl = a.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = o.lp; fl.Q.value = o.q || .7; node.connect(fl); node = fl; }
+  node.connect(g); route(g, o);
+  osc.start(t0); osc.stop(t0 + dur + .05);
+}
+// Filtered noise burst. f = filter Hz or [start, end]; ft = filter type.
+function hiss(dur, o = {}) {
+  const a = AU.ctx, t0 = a.currentTime + .01 + (o.t || 0), s = a.createBufferSource(), fl = a.createBiquadFilter(), g = a.createGain();
+  s.buffer = AU.noise; s.loop = true; fl.type = o.ft || 'bandpass'; fl.Q.value = o.q ?? 1;
+  const f = o.f ?? 1200, f0 = Array.isArray(f) ? f[0] : f, f1 = Array.isArray(f) ? f[1] : f;
+  fl.frequency.setValueAtTime(f0, t0); if (f1 !== f0) fl.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+  const v = o.v ?? .3, at = o.a ?? .003;
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(v, t0 + at); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  s.connect(fl); fl.connect(g); route(g, o);
+  s.start(t0, Math.random() * .5); s.stop(t0 + dur + .05);
+}
+function route(g, o) {
+  let n = g;
+  if (o.pan && AU.ctx.createStereoPanner) { const p = AU.ctx.createStereoPanner(); p.pan.value = o.pan; n.connect(p); n = p; }
+  n.connect(o.bus || AU.sfx);
+}
+// A cat voice: a sawtooth through a sweeping formant filter reads as "mew".
+function meow(p, dur, o = {}) {
+  const a = AU.ctx, t0 = a.currentTime + .01 + (o.t || 0), osc = a.createOscillator(), fl = a.createBiquadFilter(), g = a.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(p, t0); osc.frequency.linearRampToValueAtTime(p * (o.up || 1.35), t0 + dur * .35); osc.frequency.linearRampToValueAtTime(p * (o.down || .85), t0 + dur);
+  fl.type = 'bandpass'; fl.Q.value = 4; fl.frequency.setValueAtTime(700, t0); fl.frequency.linearRampToValueAtTime(1900, t0 + dur * .4); fl.frequency.linearRampToValueAtTime(900, t0 + dur);
+  const v = o.v ?? .35;
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(v, t0 + .03); g.gain.setValueAtTime(v, t0 + dur * .6); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(fl); fl.connect(g); route(g, o);
+  osc.start(t0); osc.stop(t0 + dur + .05);
+}
+const arp = (notes, step, o) => notes.forEach((m, i) => tone(mtof(m), o.dur || .35, { ...o, t: (o.t || 0) + i * step }));
+const SFX = {
+  grab: o => meow(rnd(560, 720), .22, { ...o, v: .22, up: 1.25 }),
+  select: o => tone([900, 1300], .07, { ...o, type: 'triangle', v: .12 }),
+  drop: o => { tone([170, 70], .14, { ...o, v: .35 }); hiss(.06, { ...o, f: 900, v: .08 }); },
+  toss: o => { hiss(.32, { ...o, f: [400, 2400], q: 2, v: .25, a: .05 }); meow(rnd(700, 850), .3, { ...o, v: .18, up: 1.5 }); },
+  bonk: o => { tone([620, 240], .18, { ...o, type: 'triangle', v: .4 }); hiss(.05, { ...o, f: 3000, v: .2 }); },
+  thud: o => { tone([140, 50], .25, { ...o, v: .5 }); hiss(.12, { ...o, ft: 'lowpass', f: 600, v: .2 }); },
+  splash: o => { hiss(.5, { ...o, ft: 'lowpass', f: [2200, 400], v: .35, a: .01 }); for (let i = 0; i < 4; i++) tone([rnd(500, 800), rnd(900, 1400)], .06, { ...o, v: .08, t: .06 + i * .07 }); hiss(.25, { ...o, t: .25, f: 5000, ft: 'highpass', v: .06 }); },
+  swap: o => { hiss(.25, { ...o, f: [600, 3000], v: .12, a: .02 }); },
+  job: o => arp([79, 84], .08, { ...o, type: 'triangle', v: .14, dur: .3 }),
+  bed: o => { tone([220, 180], .35, { ...o, type: 'triangle', v: .15, vib: 22, vibAmt: .04 }); },
+  hurt: o => meow(rnd(480, 560), .28, { ...o, v: .28, up: 1.1, down: .6 }),
+  ribbit: o => { for (const t of [0, .14]) tone([180, 150], .1, { ...o, t, type: 'square', lp: 900, v: .2 }); },
+  sad: o => arp([67, 63, 60], .22, { ...o, type: 'triangle', v: .18, dur: .5 }),
+  hammer: o => { hiss(.05, { ...o, f: rnd(1400, 2000), q: 6, v: .12 }); tone([rnd(300, 380), 200], .06, { ...o, v: .08 }); },
+  built: o => { for (let i = 0; i < 3; i++) hiss(.05, { ...o, t: i * .11, f: 1800, q: 6, v: .15 }); arp([72, 76, 79, 84], .07, { ...o, t: .34, type: 'triangle', v: .16, dur: .45 }); },
+  upgrade: o => arp([72, 76, 79, 83, 86], .06, { ...o, type: 'triangle', v: .15, dur: .4 }),
+  kitten: o => { meow(rnd(1000, 1200), .2, { ...o, v: .2, up: 1.2 }); arp([88, 91], .06, { ...o, t: .15, v: .06, dur: .3 }); },
+  stray: o => { meow(rnd(620, 700), .3, { ...o, v: .2 }); arp([74, 78, 81], .07, { ...o, t: .2, type: 'triangle', v: .12, dur: .35 }); },
+  scratch: o => { for (let i = 0; i < 3; i++) hiss(.06, { ...o, t: i * .035, f: [4200, 2200], q: 3, v: .16 }); },
+  spit: o => { hiss(.08, { ...o, ft: 'lowpass', f: 900, v: .18 }); tone([300, 500], .08, { ...o, v: .08 }); },
+  splat: o => { hiss(.12, { ...o, ft: 'lowpass', f: [1200, 300], v: .2 }); },
+  wizHit: o => tone([rnd(210, 250), 140], .16, { ...o, type: 'sawtooth', lp: 700, v: .2 }),
+  fizzle: o => { hiss(.4, { ...o, f: [2600, 300], q: 3, v: .18 }); tone([900, 300], .3, { ...o, type: 'square', lp: 1200, v: .05 }); },
+  poof: o => { hiss(.35, { ...o, f: [800, 3000], v: .25 }); arp([84, 88, 91, 96], .045, { ...o, t: .05, v: .1, dur: .3 }); },
+  archPoof: o => { hiss(.8, { ...o, f: [300, 3000], v: .35, a: .02 }); arp([72, 76, 79, 84, 88, 91], .07, { ...o, t: .1, type: 'triangle', v: .16, dur: .6 }); },
+  rankup: o => arp([76, 79, 84, 88], .06, { ...o, type: 'square', lp: 2500, v: .08, dur: .3 }),
+  retreat: o => tone([400, 250], .3, { ...o, type: 'triangle', v: .1, vib: 8 }),
+  stone: o => { tone([110, 60], .2, { ...o, v: .3 }); hiss(.12, { ...o, ft: 'lowpass', f: 700, v: .14 }); },
+  topple: o => { tone([90, 30], 1.6, { ...o, v: .6 }); hiss(1.8, { ...o, ft: 'lowpass', f: [1600, 150], v: .55, a: .02 }); for (let i = 0; i < 6; i++) hiss(.15, { ...o, t: .2 + i * .17, ft: 'lowpass', f: rnd(500, 1200), v: .25 }); arp([62, 66, 69, 74], .12, { ...o, t: .9, type: 'triangle', v: .15, dur: .8 }); },
+  bldHit: o => { hiss(.3, { ...o, ft: 'lowpass', f: [1800, 300], v: .3 }); tone([160, 70], .2, { ...o, v: .25 }); },
+  crash: o => { hiss(.9, { ...o, ft: 'lowpass', f: [2500, 200], v: .45 }); for (let i = 0; i < 5; i++) hiss(.08, { ...o, t: .1 + i * .09, f: rnd(1500, 3000), q: 5, v: .15 }); },
+  charge: (o, dur) => tone([220, 660], dur, { ...o, type: 'sine', v: .07, a: dur * .8, vib: 7, vibAmt: .03 }),
+  zap: o => { tone([1600, 180], .22, { ...o, type: 'sawtooth', lp: 3500, v: .16 }); hiss(.18, { ...o, f: 4000, ft: 'highpass', v: .14 }); },
+  sleep: o => { arp([76, 72, 69], .09, { ...o, v: .1, dur: .5, vib: 5 }); },
+  fire: o => { tone([200, 60], .45, { ...o, v: .35 }); hiss(.6, { ...o, ft: 'lowpass', f: [2000, 250], v: .4, a: .02 }); for (let i = 0; i < 4; i++) hiss(.03, { ...o, t: .15 + i * .09, f: 3500, q: 4, v: .1 }); },
+  slumber: o => { for (const m of [50, 57, 62]) tone(mtof(m), 1.2, { ...o, type: 'triangle', v: .12, a: .1, vib: 4 }); hiss(1, { ...o, f: [1500, 400], v: .1, a: .2 }); },
+  whiff: o => tone([500, 1000], .12, { ...o, type: 'triangle', v: .12 }),
+  achoo: o => { tone([300, 520], .25, { ...o, type: 'sawtooth', lp: 1200, v: .12, a: .2 }); hiss(.25, { ...o, t: .27, f: [3000, 1200], v: .35 }); },
+  tangle: o => tone(300, .5, { ...o, type: 'triangle', v: .22, vib: 14, vibAmt: .15 }),
+  catnip: o => { hiss(.5, { ...o, f: [500, 2500], v: .3 }); for (let i = 0; i < 6; i++) tone(rnd(900, 1800), .08, { ...o, t: .05 + i * .05, v: .08 }); },
+  place: o => { hiss(.09, { ...o, f: 900, q: 3, v: .3 }); tone([220, 130], .14, { ...o, type: 'triangle', v: .22 }); },
+  research: o => arp([67, 72, 76, 79, 84], .09, { ...o, type: 'triangle', v: .16, dur: .6 }),
+  ding: o => tone(mtof(88), .5, { ...o, type: 'triangle', v: .12 }),
+  horn: o => { for (const [m, t, d] of [[45, 0, .7], [48, .75, 1.1]]) { tone(mtof(m), d, { ...o, t, type: 'sawtooth', lp: 700, v: .22, a: .12, vib: 5, vibAmt: .01 }); tone(mtof(m + 12), d, { ...o, t, type: 'sawtooth', lp: 900, v: .08, a: .12 }); } },
+  horn2: o => { for (const [m, t, d] of [[45, 0, .35], [45, .4, .35], [52, .8, 1]]) tone(mtof(m), d, { ...o, t, type: 'sawtooth', lp: 900, v: .26, a: .05 }); for (const t of [0, .4, .8]) tone([90, 45], .3, { ...o, t, v: .4 }); },
+  click: o => tone([1100, 800], .04, { ...o, type: 'triangle', v: .06 }),
+  win: o => { arp([62, 66, 69, 74], .14, { ...o, type: 'triangle', v: .2, dur: .5 }); arp([74, 78, 81, 86], .14, { ...o, t: .6, type: 'triangle', v: .18, dur: 1.2 }); },
+  lose: o => arp([69, 65, 62, 57], .28, { ...o, type: 'triangle', v: .2, dur: .8, vib: 5 }),
+};
+const GAP = { hammer: .28, scratch: .07, hurt: .12, wizHit: .08, stone: .1, charge: .12, grab: .1, drop: .06, meow: .15, splat: .05 };
+// Play a named effect. With a world position the sound pans across the stereo field and fades when off screen.
+function sfx(name, x, y, extra) {
+  if (!AU.ctx || !AU.opts.sfx || AU.ctx.state !== 'running') return;
+  const now = AU.ctx.currentTime; if (now - (AU.last[name] || -9) < (GAP[name] || .03)) return; AU.last[name] = now;
+  const o = {};
+  if (x != null) {
+    const nx = (x - cam.x) * cam.z / (VW / 2), ny = (y - cam.y) * cam.z / (VH / 2), off = Math.max(Math.abs(nx), Math.abs(ny));
+    const k = off <= 1 ? 1 : Math.max(0, 1 - (off - 1) * 1.4); if (k <= .02) return;
+    o.pan = clamp(nx * .6, -.8, .8);
+    if (k < 1) { const g = AU.ctx.createGain(); g.gain.value = k; g.connect(AU.sfx); o.bus = g; }
+  }
+  try { SFX[name](o, extra); } catch (e) { console.warn('sfx', name, e); }
+}
+
+/* ---- music: a looping storybook folk tune in D minor, with a drum-and-bass layer for raids ---- */
+const Music = {
+  bpm: 96, step: 0, next: 0, timer: null, layers: {}, level: 0, loop: 0,
+  // 8 bars: Dm C Bb A | Dm F Gm A (root MIDI note + chord tones as offsets)
+  chords: [[50, [0, 3, 7]], [48, [0, 4, 7]], [46, [0, 4, 7]], [45, [0, 4, 7]], [50, [0, 3, 7]], [53, [0, 4, 7]], [55, [0, 3, 7]], [45, [0, 4, 7]]],
+  // melody per bar: [sixteenth step, MIDI note, length in sixteenths]
+  mel: [
+    [[0, 69, 4], [4, 74, 6], [10, 72, 2], [12, 69, 4]],
+    [[0, 67, 4], [4, 72, 4], [8, 69, 2], [10, 67, 2], [12, 64, 4]],
+    [[0, 65, 6], [6, 67, 2], [8, 69, 4], [12, 70, 4]],
+    [[0, 69, 8], [8, 73, 4], [12, 76, 4]],
+    [[0, 74, 4], [4, 72, 2], [6, 70, 2], [8, 69, 4], [12, 65, 4]],
+    [[0, 72, 6], [6, 69, 2], [8, 65, 4], [12, 69, 4]],
+    [[0, 70, 4], [4, 67, 4], [8, 70, 4], [12, 74, 4]],
+    [[0, 73, 6], [6, 76, 2], [8, 74, 8]],
+  ],
+  init() {
+    const a = AU.ctx;
+    this.duck = a.createGain(); this.duck.connect(AU.mus);
+    for (const k of ['calm', 'tense']) { const g = a.createGain(); g.gain.value = k === 'calm' ? 1 : 0; g.connect(this.duck); this.layers[k] = g; }
+    this.next = a.currentTime + .1;
+    this.timer = setInterval(() => this.pump(), 30);
+  },
+  // Target intensity: 0 calm, 1 wizards mustering, 2 raid in progress.
+  setLevel(l) {
+    if (l === this.level || !AU.ctx) return; this.level = l;
+    const t = AU.ctx.currentTime;
+    this.layers.tense.gain.setTargetAtTime(l === 0 ? 0 : l === 1 ? .6 : 1, t, 1.2);
+    this.layers.calm.gain.setTargetAtTime(l === 2 ? .7 : 1, t, 1.2);
+  },
+  pump() {
+    const a = AU.ctx; if (!a || a.state !== 'running') return;
+    const sp = 60 / this.bpm / 4;
+    if (this.next < a.currentTime - .2) this.next = a.currentTime + .05; // tab was asleep: don't burst-play the backlog
+    while (this.next < a.currentTime + .15) { if (this.playing) this.sched(this.step, this.next - a.currentTime); this.next += sp; this.step = (this.step + 1) % 128; if (this.step === 0) this.loop++; }
+  },
+  sched(s, t) {
+    const bar = s >> 4, st = s & 15, [root, tri] = this.chords[bar], sp = 60 / this.bpm / 4, calm = this.layers.calm, tense = this.layers.tense;
+    // harp: arpeggiated chord tones on eighth notes
+    if (st % 2 === 0) { const seq = [0, 1, 2, 3, 2, 1, 2, 1], idx = seq[st >> 1], notes = [root + 12 + tri[0], root + 12 + tri[2], root + 24 + tri[0], root + 24 + tri[1]]; tone(mtof(notes[idx]), sp * 3.2, { t, type: 'triangle', v: st === 0 ? .2 : .13, bus: calm, lp: 2600 }); }
+    // pad: soft held chord each bar
+    if (st === 0) for (const d of tri) tone(mtof(root + 12 + d), sp * 16, { t, type: 'sine', v: .05, a: .4, bus: calm });
+    // melody: flute on loops 0 and 2, ocarina an octave down on loop 3, rest on loop 1
+    const phase = this.loop % 4;
+    if (phase !== 1) for (const [ms, m, len] of this.mel[bar]) if (ms === st) {
+      if (phase === 3) tone(mtof(m - 12), sp * len * .95, { t, type: 'triangle', v: .12, a: .03, lp: 1400 , bus: calm });
+      else tone(mtof(m), sp * len * .95, { t, type: 'sine', v: .11, a: .05, vib: 5.5, vibAmt: .008, bus: calm });
+    }
+    // tense layer: frame drum and a pulsing bass
+    if (this.level > 0) {
+      if (st === 0 || st === 6 || st === 8 || st === 12) { const acc = st === 0 || st === 8; tone([acc ? 95 : 80, 42], .28, { t, v: acc ? .55 : .35, bus: tense }); hiss(.08, { t, ft: 'lowpass', f: 900, v: .12, bus: tense }); }
+      if (st % 2 === 0) tone(mtof(root - 12), sp * 1.6, { t, type: 'sawtooth', lp: 380, v: st % 4 === 0 ? .22 : .14, bus: tense });
+      if (this.level === 2 && (st === 4 || st === 14)) hiss(.05, { t, f: 6000, ft: 'highpass', v: .07, bus: tense });
+    }
+  },
+  playing: false, ducked: 1,
+  // Called every frame: start the tune from the top when play resumes, and dip the volume while paused.
+  play(on, duck) {
+    if (on !== this.playing) { this.playing = on; if (on) { this.step = 0; this.loop = 0; } }
+    if (duck !== this.ducked && this.duck) { this.ducked = duck; this.duck.gain.setTargetAtTime(duck, AU.ctx.currentTime, .25); }
+  },
+};
 
 /* ================= world art (built once) ================= */
 const TS = (navigator.deviceMemory && navigator.deviceMemory < 4) ? 1 : 1.5;
@@ -618,15 +823,15 @@ function setRole(c, role) {
   c.role = role; c.maxHp = ROLE[role].hp + (role === 'scrapper' && c.rank >= 1 ? 2 : 0);
   c.hp = Math.min(c.maxHp, c.hp + (role === 'scrapper' ? 2 : 0));
   c.ax = c.x; c.ay = c.y;
-  float(c.x, c.y - 50, ROLE[role].name + '!', '#f3e6c8');
+  float(c.x, c.y - 50, ROLE[role].name + '!', '#f3e6c8'); sfx('job', c.x, c.y);
 }
 function startSwap(c, role) {
   if (!c || c.state === 'frog' || c.state === 'flying') return;
   if (c.state === 'inBed') leaveBed(c);
   if (c.role === role && c.state !== 'swap') return;
-  c.state = 'swap'; c.swapTo = role; c.timer = 1.2; c.stun = 0;
+  c.state = 'swap'; c.swapTo = role; c.timer = 1.2; c.stun = 0; sfx('swap', c.x, c.y);
 }
-function enterBed(c, b) { c.state = 'inBed'; c.bed = b; b.occ.push(c); c.x = b.x; c.y = b.y; if (G.sel === c) G.sel = null; }
+function enterBed(c, b) { if (G.t > 0) sfx('bed', b.x, b.y); c.state = 'inBed'; c.bed = b; b.occ.push(c); c.x = b.x; c.y = b.y; if (G.sel === c) G.sel = null; }
 function leaveBed(c) {
   const b = c.bed; if (b) { const i = b.occ.indexOf(c); if (i >= 0) b.occ.splice(i, 1); }
   c.bed = null; c.state = 'idle'; if (b) { c.x = b.x + rnd(-16, 16); c.y = b.y + b.r * .5 + 14; }
@@ -638,20 +843,20 @@ function removeCat(c) {
 }
 function hurtCat(c, d) {
   if (c.state === 'frog' || c.state === 'inBed') return;
-  c.hp -= d; c.hit = 0.3; shake(2); dmgNum(c.x, c.y - 60, d, '#ff9f8f');
+  c.hp -= d; c.hit = 0.3; shake(2); dmgNum(c.x, c.y - 60, d, '#ff9f8f'); sfx('hurt', c.x, c.y);
   if (c.hp <= 0) {
     c.lives--; G.stats.livesLost++;
     puff(c.x, c.y - 16, '#9fe07a', 12);
-    if (c.lives <= 0) { float(c.x, c.y - 40, c.name + ' is out of lives', '#ea6a58'); removeCat(c); return; }
+    if (c.lives <= 0) { sfx('sad', c.x, c.y); float(c.x, c.y - 40, c.name + ' is out of lives', '#ea6a58'); removeCat(c); return; }
     if (G.held === c) G.held = null;
-    c.state = 'frog'; c.timer = 5; c.hp = 0; c.stun = 0; c.channelled = false;
+    sfx('ribbit', c.x, c.y); c.state = 'frog'; c.timer = 5; c.hp = 0; c.stun = 0; c.channelled = false;
     float(c.x, c.y - 44, 'Ribbit! ' + c.lives + ' lives left', '#9fe07a');
   }
 }
 function splash(c) {
   const r = rx(c.y); c.x = c.x < r ? r - RHW - 16 : r + RHW + 16; c.ax = c.x; c.ay = c.y;
   c.stun = 1.4; c.stunKind = 'dizzy';
-  puff(c.x, c.y - 8, '#9fdcf0', 14); float(c.x, c.y - 44, 'Splash! Hiss!', '#9fdcf0');
+  puff(c.x, c.y - 8, '#9fdcf0', 14); float(c.x, c.y - 44, 'Splash! Hiss!', '#9fdcf0'); sfx('splash', c.x, c.y);
 }
 function fear(c, dt) {
   if (c.role === 'scrapper') return false;
@@ -682,7 +887,7 @@ function updCat(c, dt) {
   if (c.state === 'swap') { c.timer -= dt; if (c.timer <= 0) { c.state = 'idle'; setRole(c, c.swapTo); } return; }
   c.atk -= dt;
   // strays
-  for (let i = G.strays.length - 1; i >= 0; i--) { const s = G.strays[i]; if (Math.hypot(s.x - c.x, s.y - c.y) < 36) { G.strays.splice(i, 1); const k = addCat(s.x, s.y, 'tabby', s.coat); k.linger = 0.6; float(s.x, s.y - 44, 'A stray joins the colony!', '#f2a93b'); puff(s.x, s.y - 16, '#f7d98a', 10); } }
+  for (let i = G.strays.length - 1; i >= 0; i--) { const s = G.strays[i]; if (Math.hypot(s.x - c.x, s.y - c.y) < 36) { G.strays.splice(i, 1); const k = addCat(s.x, s.y, 'tabby', s.coat); k.linger = 0.6; sfx('stray', s.x, s.y); float(s.x, s.y - 44, 'A stray joins the colony!', '#f2a93b'); puff(s.x, s.y - 16, '#f7d98a', 10); } }
   if (!fear(c, dt)) {
     if (c.role === 'tabby') aiTabby(c, dt);
     else if (c.role === 'builder') aiBuilder(c, dt);
@@ -711,13 +916,13 @@ function aiBuilder(c, dt) {
   const sx = b.x + Math.cos(a) * (b.r + 14), sy = b.y + Math.sin(a) * (b.r * .5 + 12);
   if (Math.hypot(c.x - sx, c.y - sy) > 5) { stepToward(c, sx, sy, 66, dt, true); return; }
   c.working = true; c.face = b.x < c.x ? -1 : 1;
-  if (Math.random() < dt * 3) puff(b.x + rnd(-b.r, b.r) * .6, b.y - rnd(0, 30), '#d9c29a', 1);
+  if (Math.random() < dt * 3) { puff(b.x + rnd(-b.r, b.r) * .6, b.y - rnd(0, 30), '#d9c29a', 1); sfx('hammer', b.x, b.y); }
   if (!b.done) {
     b.prog += dt / BUILD_T[b.type]; b.hp = b.maxHp * Math.max(.2, b.prog);
-    if (b.prog >= 1) { b.prog = 1; b.done = true; b.hp = b.maxHp; float(b.x, b.y - 70, bldName(b) + ' built', '#f2a93b'); puff(b.x, b.y - 20, '#f7d98a', 12); }
+    if (b.prog >= 1) { b.prog = 1; b.done = true; b.hp = b.maxHp; sfx('built', b.x, b.y); float(b.x, b.y - 70, bldName(b) + ' built', '#f2a93b'); puff(b.x, b.y - 20, '#f7d98a', 12); }
   } else if (b.upgWant) {
     b.upg += dt / UPG_T[b.tier];
-    if (b.upg >= 1) { b.tier++; b.upg = 0; b.upgWant = false; b.r = BED_R[b.tier]; b.maxHp = b.hp = BED_HP[b.tier]; float(b.x, b.y - 80, 'Upgraded to ' + BED_NAME[b.tier], '#f2a93b'); puff(b.x, b.y - 30, '#f7d98a', 14); }
+    if (b.upg >= 1) { b.tier++; b.upg = 0; b.upgWant = false; b.r = BED_R[b.tier]; b.maxHp = b.hp = BED_HP[b.tier]; sfx('upgrade', b.x, b.y); float(b.x, b.y - 80, 'Upgraded to ' + BED_NAME[b.tier], '#f2a93b'); puff(b.x, b.y - 30, '#f7d98a', 14); }
   } else b.hp = Math.min(b.maxHp, b.hp + 4 * dt);
 }
 function slotFor(c, w) { const a = ((c.id % 6) / 6) * Math.PI * 2 + .4; return { x: w.x + Math.cos(a) * (w.r + 16), y: w.y + Math.sin(a) * (w.r * .5 + 14) }; }
@@ -739,8 +944,8 @@ function aiScrapper(c, dt) {
     if (d > reach) stepToward(c, w.x, w.y, 80, dt, true);
     else if (c.atk <= 0) {
       c.face = w.x < c.x ? -1 : 1;
-      if (ranged && d > 40) { G.shots.push({ kind: 'hairball', x: c.x, y: c.y - 20, t: w, sp: 320, by: c, dmg: scrapDmg(c) * .8 }); c.atk = 1.3; }
-      else { hurtWiz(w, scrapDmg(c), c); c.atk = .8; scratch(w.x, w.y - 30); c.pounce = .2; }
+      if (ranged && d > 40) { G.shots.push({ kind: 'hairball', x: c.x, y: c.y - 20, t: w, sp: 320, by: c, dmg: scrapDmg(c) * .8 }); c.atk = 1.3; sfx('spit', c.x, c.y); }
+      else { sfx('scratch', w.x, w.y); hurtWiz(w, scrapDmg(c), c); c.atk = .8; scratch(w.x, w.y - 30); c.pounce = .2; }
     }
     return;
   }
@@ -749,7 +954,7 @@ function aiScrapper(c, dt) {
     const a = (c.id * 1.7) % 2.4 + 2;
     const tp = { x: t.x + Math.cos(a) * 64, y: t.y + Math.sin(a) * 26 + 10 };
     if (dist(c, tp) > 6) stepToward(c, tp.x, tp.y, 80, dt, true);
-    else if (c.atk <= 0) { hurtTower(t, scrapDmg(c)); c.atk = .8; c.face = t.x < c.x ? -1 : 1; scratch(t.x + (c.x - t.x) * .6, t.y - 40); c.pounce = .2; }
+    else if (c.atk <= 0) { sfx('scratch', t.x, t.y); hurtTower(t, scrapDmg(c)); c.atk = .8; c.face = t.x < c.x ? -1 : 1; scratch(t.x + (c.x - t.x) * .6, t.y - 40); c.pounce = .2; }
     return;
   }
   if (dist(c, anchor) > 6) stepToward(c, anchor.x, anchor.y, 74, dt, true);
@@ -763,44 +968,44 @@ function updFlight(c, dt) {
     c.state = 'idle'; c.arc = 0; c.spin = 0; c.ax = c.x; c.ay = c.y;
     const w = nearest(G.wiz, c, null, 34);
     const t = nearest(G.towers, c, z => z.alive, 70);
-    if (w) { hurtWiz(w, 2, c); w.stun = Math.max(w.stun, 1.4); w.stunKind = 'bonk'; w.channel = null; burst(w.x, w.y - 90); float(w.x, w.y - 90, 'Bonk!', '#fff6dc'); }
-    else if (t) { hurtTower(t, 3); float(c.x, c.y - 50, 'Thud!', '#f2a93b'); }
-    if (inWater(c.x, c.y)) splash(c); else { c.stun = .9; c.stunKind = 'dizzy'; puff(c.x, c.y, '#d9c29a', 6); }
+    if (w) { sfx('bonk', w.x, w.y); hurtWiz(w, 2, c); w.stun = Math.max(w.stun, 1.4); w.stunKind = 'bonk'; w.channel = null; burst(w.x, w.y - 90); float(w.x, w.y - 90, 'Bonk!', '#fff6dc'); }
+    else if (t) { sfx('thud', t.x, t.y); hurtTower(t, 3); float(c.x, c.y - 50, 'Thud!', '#f2a93b'); }
+    if (inWater(c.x, c.y)) splash(c); else { c.stun = .9; c.stunKind = 'dizzy'; puff(c.x, c.y, '#d9c29a', 6); if (!w && !t) sfx('drop', c.x, c.y); }
   }
 }
 
 /* ================= wizards ================= */
 function hurtWiz(w, d, by) {
   if (!G.wiz.includes(w)) return;
-  w.hp -= d; w.hit = .3; shake(2); ring(w.x, w.y - 4, '#e7dcff'); dmgNum(w.x, w.y - 90, d, '#e7dcff');
-  if (w.channel && Math.random() < .5) { w.channel = null; w.cast = 1.2; float(w.x, w.y - 86, 'Fizzle!', '#c8b6ff'); puff(w.x + w.face * 22, w.y - 72, '#c8b6ff', 6, true); }
+  w.hp -= d; w.hit = .3; shake(2); sfx('wizHit', w.x, w.y); ring(w.x, w.y - 4, '#e7dcff'); dmgNum(w.x, w.y - 90, d, '#e7dcff');
+  if (w.channel && Math.random() < .5) { w.channel = null; w.cast = 1.2; sfx('fizzle', w.x, w.y); float(w.x, w.y - 86, 'Fizzle!', '#c8b6ff'); puff(w.x + w.face * 22, w.y - 72, '#c8b6ff', 6, true); }
   if (w.hp <= 0) {
     G.wiz.splice(G.wiz.indexOf(w), 1);
-    G.stats.wizDown++; puff(w.x, w.y - 30, '#c8b6ff', 22, true);
+    G.stats.wizDown++; puff(w.x, w.y - 30, '#c8b6ff', 22, true); sfx(w.type === 'arch' ? 'archPoof' : 'poof', w.x, w.y);
     G.fx.push({ kind: 'hat', x: w.x, y: w.y - 60, vy: -110, vx: rnd(-40, 40), rot: 0, life: 2.4, arch: w.type === 'arch' });
     float(w.x, w.y - 80, w.type === 'arch' ? 'The Archmage is gone!' : 'Poof!', '#c8b6ff');
     if (by && by.role === 'scrapper') {
       by.xp++; const nr = by.xp >= 5 ? 2 : by.xp >= 2 ? 1 : 0;
-      if (nr > by.rank) { by.rank = nr; if (nr === 1) { by.maxHp += 2; by.hp += 2; } float(by.x, by.y - 60, by.name + ' ranks up!', '#f2d04b'); puff(by.x, by.y - 30, '#f2d04b', 12, true); }
+      if (nr > by.rank) { sfx('rankup', by.x, by.y); by.rank = nr; if (nr === 1) { by.maxHp += 2; by.hp += 2; } float(by.x, by.y - 60, by.name + ' ranks up!', '#f2d04b'); puff(by.x, by.y - 30, '#f2d04b', 12, true); }
     }
-  } else if (w.type === 'app' && w.hp <= 2 && w.home.alive && w.mode !== 'guard') { w.mode = 'retreat'; w.channel = null; float(w.x, w.y - 80, 'Retreat!', '#c8b6ff'); }
+  } else if (w.type === 'app' && w.hp <= 2 && w.home.alive && w.mode !== 'guard') { w.mode = 'retreat'; w.channel = null; sfx('retreat', w.x, w.y); float(w.x, w.y - 80, 'Retreat!', '#c8b6ff'); }
 }
 function hurtTower(t, d) {
   if (!t.alive) return;
-  t.hp -= d; t.hit = .2; shake(1.5); dmgNum(t.x + rnd(-30, 30), t.y - 120, d, '#e7dcff');
+  t.hp -= d; t.hit = .2; shake(1.5); sfx('stone', t.x, t.y); dmgNum(t.x + rnd(-30, 30), t.y - 120, d, '#e7dcff');
   if (Math.random() < .3) puff(t.x + rnd(-40, 40), t.y - rnd(40, 200), '#a39cb2', 2);
   if (t.hp <= 0) {
-    t.alive = false; t.hp = 0; shake(14); puff(t.x, t.y - 140, '#c8b6ff', 50, true); puff(t.x, t.y - 40, '#a39cb2', 30);
+    t.alive = false; t.hp = 0; shake(14); sfx('topple'); puff(t.x, t.y - 140, '#c8b6ff', 50, true); puff(t.x, t.y - 40, '#a39cb2', 30);
     float(t.x, t.y - 200, t.name + ' toppled!', '#f2a93b'); say(t.name + ' toppled!');
     G.wiz.forEach(w => { if (w.home === t) w.mode = 'raid'; });
   }
 }
 function hurtBld(b, d) {
   if (!G.blds.includes(b)) return;
-  b.hp -= d; b.hit = .3; b.scorch = Math.min(1, (b.scorch || 0) + .25); shake(4); ring(b.x, b.y, '#ffae4a'); dmgNum(b.x, b.y - 70, d, '#ffb07a');
+  b.hp -= d; b.hit = .3; b.scorch = Math.min(1, (b.scorch || 0) + .25); shake(4); sfx('bldHit', b.x, b.y); ring(b.x, b.y, '#ffae4a'); dmgNum(b.x, b.y - 70, d, '#ffb07a');
   if (b.hp <= 0) {
     [...b.occ].forEach(c => { leaveBed(c); c.stun = 1.5; c.stunKind = 'dizzy'; c.x = b.x + rnd(-30, 30); c.y = b.y + rnd(-10, 30); });
-    G.blds.splice(G.blds.indexOf(b), 1);
+    G.blds.splice(G.blds.indexOf(b), 1); sfx('crash', b.x, b.y);
     puff(b.x, b.y - 20, '#c08a4f', 30); puff(b.x, b.y - 30, '#6b5f55', 16);
     float(b.x, b.y - 60, bldName(b) + ' destroyed', '#ea6a58');
   }
@@ -809,22 +1014,23 @@ function beginCast(w, target) {
   const S = WIZ[w.type];
   w.face = target.x < w.x ? -1 : 1;
   const crowd = G.cats.filter(c => activeCat(c) && dist(c, w) < 100).length;
-  if (crowd >= 5 && Math.random() < .3) { w.cast = 2; float(w.x, w.y - 90, 'Achoo!', '#f3e6c8'); puff(w.x + w.face * 14, w.y - 60, '#f3e6c8', 8); w.stun = .8; w.stunKind = 'sneeze'; return; }
+  if (crowd >= 5 && Math.random() < .3) { w.cast = 2; sfx('achoo', w.x, w.y); float(w.x, w.y - 90, 'Achoo!', '#f3e6c8'); puff(w.x + w.face * 14, w.y - 60, '#f3e6c8', 8); w.stun = .8; w.stunKind = 'sneeze'; return; }
   let kind, rad;
   if (w.type === 'arch') { kind = 'slumber'; rad = 80; }
   else if (target.type) { kind = 'fire'; rad = 30; }
   else { kind = Math.random() < .3 ? 'sleep' : 'zap'; rad = 28; }
-  w.channel = { kind, x: target.x, y: target.y + (target.type ? -2 : 0), rad, t: S.wind, max: S.wind, target };
+  w.channel = { kind, x: target.x, y: target.y + (target.type ? -2 : 0), rad, t: S.wind, max: S.wind, target }; sfx('charge', w.x, w.y, S.wind);
 }
 function releaseSpell(w) {
   const ch = w.channel; w.channel = null; w.cast = WIZ[w.type].cd; w.flash = .35;
   const tip = { x: w.x + w.face * 13 * WIZ[w.type].scale, y: w.y - 46 * WIZ[w.type].scale };
   G.beams.push({ x0: tip.x, y0: tip.y, x1: ch.x, y1: ch.y, kind: ch.kind, life: .3 }); shake(ch.kind === 'slumber' ? 6 : 3); ring(ch.x, ch.y, SPELL_COL[ch.kind]); for (let i = 1; i < 9; i++) { const k = i / 9; puff(lerp(tip.x, ch.x, k), lerp(tip.y, ch.y, k) - Math.sin(k * Math.PI) * 30, SPELL_COL[ch.kind], 1, true); }
+  sfx(ch.kind, ch.x, ch.y);
   const hit = G.cats.filter(c => activeCat(c) && Math.hypot(c.x - ch.x, c.y - ch.y) < ch.rad);
   const col = SPELL_COL[ch.kind];
   puff(ch.x, ch.y - 6, col, ch.kind === 'slumber' ? 22 : 12, true);
   if (ch.kind === 'fire') { const b = G.blds.includes(ch.target) ? ch.target : null; if (b) hurtBld(b, 5); hit.forEach(c => hurtCat(c, 1)); return; }
-  if (!hit.length) { float(ch.x, ch.y - 30, 'Missed!', '#d8cbb0'); G.stats.dodged++; return; }
+  if (!hit.length) { sfx('whiff', ch.x, ch.y); float(ch.x, ch.y - 30, 'Missed!', '#d8cbb0'); G.stats.dodged++; return; }
   for (const c of hit) {
     if (ch.kind === 'zap') { if (c.rank >= 2 && Math.random() < .25) { float(c.x, c.y - 50, 'Dodged!', '#f2d04b'); continue; } hurtCat(c, 1); }
     else { c.stun = ch.kind === 'slumber' ? 3.5 : 3; c.stunKind = 'sleep'; float(c.x, c.y - 44, 'Zzz', '#c8b6ff'); }
@@ -835,7 +1041,7 @@ function updWiz(w, dt) {
   w.moving = false; if (w.hit > 0) w.hit -= dt; if (w.flash > 0) w.flash -= dt;
   if (w.stun > 0) { w.stun -= dt; return; }
   const S = WIZ[w.type];
-  for (let i = G.traps.length - 1; i >= 0; i--) { const tr = G.traps[i]; if (Math.hypot(tr.x - w.x, tr.y - w.y) < 24) { G.traps.splice(i, 1); w.stun = 5; w.stunKind = 'tangle'; w.channel = null; float(w.x, w.y - 86, 'Tangled!', '#f2a93b'); hurtWiz(w, 1); return; } }
+  for (let i = G.traps.length - 1; i >= 0; i--) { const tr = G.traps[i]; if (Math.hypot(tr.x - w.x, tr.y - w.y) < 24) { G.traps.splice(i, 1); w.stun = 5; w.stunKind = 'tangle'; w.channel = null; sfx('tangle', w.x, w.y); float(w.x, w.y - 86, 'Tangled!', '#f2a93b'); hurtWiz(w, 1); return; } }
   if (w.channel) {
     w.channel.t -= dt; w.face = w.channel.x < w.x ? -1 : 1;
     if (w.channel.t <= 0) releaseSpell(w);
@@ -873,7 +1079,7 @@ function updShot(s, dt) {
   const t = s.t;
   if (!G.wiz.includes(t)) return false;
   const dx = t.x - s.x, dy = (t.y - 40) - s.y, d = Math.hypot(dx, dy);
-  if (d < 14) { hurtWiz(t, s.dmg, s.by); puff(t.x, t.y - 40, '#b9652a', 6); return false; }
+  if (d < 14) { sfx('splat', t.x, t.y); hurtWiz(t, s.dmg, s.by); puff(t.x, t.y - 40, '#b9652a', 6); return false; }
   s.x += dx / d * s.sp * dt; s.y += dy / d * s.sp * dt; return true;
 }
 
@@ -890,7 +1096,7 @@ function updBeds(dt) {
         b.breedT = 0; G.stats.born++;
         const k = addCat(b.x, b.y + b.r * .5 + 12); k.ax = b.x; k.ay = b.y + 60;
         if (roomIn(b)) enterBed(k, b);
-        float(b.x, b.y - b.r - 40, '+1 kitten', '#f2a93b'); puff(b.x, b.y - 30, '#ffc2d6', 8);
+        sfx('kitten', b.x, b.y); float(b.x, b.y - b.r - 40, '+1 kitten', '#f2a93b'); puff(b.x, b.y - 30, '#ffc2d6', 8);
       }
     } else b.breedT = Math.max(0, b.breedT - dt);
   }
@@ -902,9 +1108,9 @@ function updResearch(dt) {
   if (!power) return;
   if (G.done[G.current]) { const nx = TECHS.find(t => !G.done[t.id]); if (nx) G.current = nx.id; }
   const tech = TECHS.find(t => t.id === G.current);
-  if (tech && !G.done[tech.id]) { G.prog[tech.id] += power * dt; if (G.prog[tech.id] >= tech.cost) { G.done[tech.id] = true; say('Research complete: ' + tech.name + '. ' + tech.desc + '.'); } }
+  if (tech && !G.done[tech.id]) { G.prog[tech.id] += power * dt; if (G.prog[tech.id] >= tech.cost) { G.done[tech.id] = true; sfx('research'); say('Research complete: ' + tech.name + '. ' + tech.desc + '.'); } }
   const gadgets = ['yarn', 'catnip'].filter(g => G.done[g] && G.tray[g] < 6);
-  if (gadgets.length) { G.craftT += power * .5 * dt; if (G.craftT >= 10) { G.craftT = 0; const g = gadgets[G.craftNext++ % gadgets.length]; G.tray[g]++; } }
+  if (gadgets.length) { G.craftT += power * .5 * dt; if (G.craftT >= 10) { G.craftT = 0; const g = gadgets[G.craftNext++ % gadgets.length]; G.tray[g]++; sfx('ding'); } }
 }
 function updTowers(dt) {
   for (const t of G.towers) {
@@ -921,12 +1127,12 @@ function updTowers(dt) {
     for (const t of G.towers) { if (!t.alive) continue; const gs = G.wiz.filter(w => w.home === t && w.type === 'app' && w.mode === 'guard'); pool.push(...gs.slice(0, Math.max(0, gs.length - 1))); }
     const sent = pool.slice(0, size);
     sent.forEach((w, i) => { w.mode = 'muster'; w.muster = { x: BR_E.x + 150 + (i % 3) * 40, y: BYM - 60 + Math.floor(i / 3) * 60 + (i % 2) * 30 }; });
-    if (sent.length) { banner(sent.length + ' wizards are gathering at the bridge', 4); say('The wizards are gathering at the bridge. They cross in 20 seconds.'); }
+    if (sent.length) { sfx('horn'); banner(sent.length + ' wizards are gathering at the bridge', 4); say('The wizards are gathering at the bridge. They cross in 20 seconds.'); }
   }
   if (G.waveT <= 0) {
     G.mustering = false; G.waveN++; G.waveT = 85;
     const m = G.wiz.filter(w => w.mode === 'muster'); m.forEach(w => { w.mode = 'raid'; w.goal = null; });
-    if (m.length) banner('Wave ' + G.waveN + ': the wizards are crossing!', 3);
+    if (m.length) { sfx('horn2'); banner('Wave ' + G.waveN + ': the wizards are crossing!', 3); }
   }
 }
 
@@ -1670,7 +1876,7 @@ cv.addEventListener('pointerdown', e => {
   if (c) {
     c.prev = c.state === 'swap' ? 'swap' : 'idle'; c.state = 'held'; c.stun = 0; G.held = c; G.sel = c; c.scared = 0;
     const q = toWorldS({ x: s.x, y: s.y - lift }); c.x = q.x; c.y = q.y + 20;
-    down = { x: s.x, y: s.y }; samples = [{ x: q.x, y: q.y, t: performance.now() }];
+    down = { x: s.x, y: s.y }; samples = [{ x: q.x, y: q.y, t: performance.now() }]; sfx('grab', c.x, c.y);
     hud();
   } else pan = { sx: s.x, sy: s.y, cx: cam.x, cy: cam.y, moved: false };
 });
@@ -1710,12 +1916,12 @@ function release(e) {
   const vx = (p.x - s0.x) / dtm * 1000, vy = (p.y - s0.y) / dtm * 1000, spd = Math.hypot(vx, vy);
   const moved = down ? Math.hypot(s.x - down.x, s.y - down.y) : 99;
   c.state = c.prev === 'swap' ? 'swap' : 'idle'; c.ax = c.x; c.ay = c.y; c.idleFor = 0; c.linger = 1.5;
-  if (moved < tapMax) { G.sel = c; hud(); return; }
+  if (moved < tapMax) { G.sel = c; hud(); sfx('select'); return; }
   if (spd > 1100 && now - samples[samples.length - 1].t < 60) {
     const k = Math.min(1, 420 / (spd * .32));
     c.state = 'flying'; c.ft = 0; c.fdur = .5; c.fx0 = c.x; c.fy0 = c.y; c.face = vx < 0 ? -1 : 1;
     c.fx1 = clamp(c.x + vx * .32 * k, 20, WW - 20); c.fy1 = clamp(c.y + vy * .32 * k, 50, WH - 16); c.arc = 0;
-    return;
+    sfx('toss', c.x, c.y); return;
   }
   const b = bldAt(p);
   if (b && b.done) {
@@ -1723,7 +1929,7 @@ function release(e) {
     else if (b.type === 'dojo') startSwap(c, 'scrapper');
     else if (b.type === 'workshop') startSwap(c, 'tinker');
     c.y = b.y + b.r * .5 + 18; c.ax = c.x; c.ay = c.y;
-  } else if (inWater(c.x, c.y)) splash(c);
+  } else if (inWater(c.x, c.y)) splash(c); else sfx('drop', c.x, c.y);
 }
 cv.addEventListener('pointerup', release);
 cv.addEventListener('pointercancel', release);
@@ -1733,23 +1939,23 @@ function useTool(p, shift) {
   if (t === 'bed' || t === 'dojo' || t === 'workshop') {
     const r = t === 'bed' ? 36 : 42;
     if (!validSite(p.x, p.y, r)) { say('Build on open ground on the village side, clear of other buildings.'); return; }
-    addBld(t, p.x, p.y, false);
+    addBld(t, p.x, p.y, false); sfx('place', p.x, p.y);
     say(G.cats.some(c => c.role === 'builder' || (c.state === 'swap' && c.swapTo === 'builder')) ? 'Site placed. Your Builders are on their way.' : 'Site placed. Give a cat the Builder job to start construction.');
     if (!shift && !keyShift && !G.keep) setTool(null);
   } else if (t === 'upgrade') {
     const b = bldAt(p);
     if (!b || b.type !== 'bed' || !b.done) { say(tx('Click', 'Tap') + ' a finished cat bed to upgrade it.'); return; }
     if (b.tier >= 2) { say('That Cat Tree is already fully upgraded.'); return; }
-    b.upgWant = true; float(b.x, b.y - 80, 'Upgrade queued', '#d4c6ff');
+    b.upgWant = true; sfx('place', b.x, b.y); float(b.x, b.y - 80, 'Upgrade queued', '#d4c6ff');
     if (!G.cats.some(c => c.role === 'builder')) say('Upgrade queued. It needs a Builder.');
     setTool(null);
   } else if (t === 'yarn') {
     if (G.tray.yarn <= 0) { setTool(null); return; }
     if (inWater(p.x, p.y)) { say('Yarn floats away in water. Place it on land.'); return; }
-    G.traps.push({ x: p.x, y: p.y }); G.tray.yarn--; if (G.tray.yarn <= 0) setTool(null);
+    G.traps.push({ x: p.x, y: p.y }); G.tray.yarn--; sfx('place', p.x, p.y); if (G.tray.yarn <= 0) setTool(null);
   } else if (t === 'catnip') {
     if (G.tray.catnip <= 0) { setTool(null); return; }
-    G.tray.catnip--; G.fx.push({ kind: 'cloud', x: p.x, y: p.y, life: 1.3, max: 1.3 });
+    G.tray.catnip--; G.fx.push({ kind: 'cloud', x: p.x, y: p.y, life: 1.3, max: 1.3 }); sfx('catnip', p.x, p.y);
     let n = 0; G.wiz.slice().forEach(w => { if (Math.hypot(w.x - p.x, (w.y - p.y) * 2.2) < 110) { n++; w.stun = 4; w.stunKind = 'catnip'; w.channel = null; hurtWiz(w, 2); } });
     float(p.x, p.y - 30, n ? 'Catnip! ' + n + ' dazed' : 'Catnip!', '#f2a3d6');
     if (G.tray.catnip <= 0) setTool(null);
@@ -1767,6 +1973,8 @@ window.addEventListener('keydown', e => {
   const tools = { b: 'bed', f: 'dojo', r: 'workshop', u: 'upgrade', y: 'yarn', c: 'catnip' };
   if (tools[k]) { setTool(G.tool === tools[k] ? null : tools[k]); return; }
   if (k === 'h') { goHome(); return; }
+  if (k === 'm') { setAudio('music', !AU.opts.music); return; }
+  if (k === 'n') { setAudio('sfx', !AU.opts.sfx); return; }
   if (k === '=' || k === '+') zoomBy(1.15); if (k === '-') zoomBy(1 / 1.15);
   if (k === 'escape') setTool(null);
 });
@@ -1881,6 +2089,13 @@ $('zoomIn').addEventListener('click', () => zoomBy(1.15));
 $('zoomOut').addEventListener('click', () => zoomBy(1 / 1.15));
 $('homeBtn').addEventListener('click', goHome);
 $('restartBtn').addEventListener('click', () => { setSheet(false); restart(); });
+$('musicBtn').addEventListener('click', () => { audioStart(); setAudio('music', !AU.opts.music); });
+$('sfxBtn').addEventListener('click', () => { audioStart(); setAudio('sfx', !AU.opts.sfx); });
+syncAudioBtns();
+// Browsers only allow sound after a gesture: start (or resume) the audio context on the first tap, click or key.
+for (const ev of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(ev, audioStart, { capture: true, passive: true });
+document.addEventListener('click', e => { if (e.target.closest('button')) sfx('click'); });
+document.addEventListener('visibilitychange', () => { if (!AU.ctx) return; if (document.hidden) AU.ctx.suspend(); else AU.ctx.resume(); });
 $('ordersBtn').addEventListener('click', () => setSheet(!document.documentElement.classList.contains('sheet')));
 $('sheetClose').addEventListener('click', () => setSheet(false));
 $('scrim').addEventListener('click', () => setSheet(false));
@@ -1904,7 +2119,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && !G.
 }
 $('startBtn').addEventListener('click', () => { overlay.hidden = true; G.paused = false; hud(); refreshHint(); });
 function end(win, why) {
-  if (G.over) return; G.over = win ? 'win' : 'lose'; G.paused = true; G.held = null; setTool(null);
+  if (G.over) return; G.over = win ? 'win' : 'lose'; G.paused = true; G.held = null; setTool(null); sfx(win ? 'win' : 'lose');
   const st = G.stats, stars = win ? 1 + (G.t < 900 ? 1 : 0) + (st.livesLost <= 12 ? 1 : 0) : 0;
   $('card').innerHTML = win
     ? `<h2>Mothwick is safe</h2><p>Both towers toppled in ${fmt(G.t)}. <b style="color:var(--amber)">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</b></p>
@@ -1926,6 +2141,7 @@ function frame(now) {
   const raw = Math.min(.05, (now - last) / 1000); last = now;
   if (!G.paused) for (let i = 0; i < G.speed; i++) { update(raw); if (G.over) break; }
   if (overlay.hidden) updCamera(raw);
+  if (AU.ctx) { Music.play(overlay.hidden && !G.over, G.paused ? .35 : 1); Music.setLevel(G.wiz.some(w => w.mode === 'raid') ? 2 : G.mustering ? 1 : 0); }
   RT += raw; updAtmos(raw, RT); if (G.shake > 0) G.shake = Math.max(0, G.shake - 45 * raw);
   if (G.msgT > 0) { G.msgT -= raw; if (G.msgT <= 0) refreshHint(); }
   hudT -= raw; if (hudT <= 0) { hudT = .2; hud(); if (G.msgT <= 0) refreshHint(); }
