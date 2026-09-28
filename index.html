@@ -282,9 +282,23 @@ const cam = { x: HOME.x + 140, y: HOME.y - 60, z: 1 };
 const AU = { ctx: null, master: null, sfx: null, mus: null, noise: null, last: {}, opts: { music: true, sfx: true } };
 try { Object.assign(AU.opts, JSON.parse(localStorage.getItem('ww-audio') || '{}')); } catch (_) {}
 function saveAudio() { try { localStorage.setItem('ww-audio', JSON.stringify(AU.opts)); } catch (_) {} }
+// iPhone and iPad mute web audio when the ring/silent switch is on. Asking for the "playback" session (as music apps do)
+// lets the game be heard anyway; the in-game Music and Sound buttons still mute it. Older iOS without navigator.audioSession
+// gets the same effect from a looping silent <audio> element started inside the tap.
+function iosPlayback() {
+  try { if (navigator.audioSession) { navigator.audioSession.type = 'playback'; return; } } catch (_) {}
+  if (AU.keepAlive || !/iPad|iPhone|iPod/.test(navigator.userAgent) && !(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return;
+  const n = 800, buf = new ArrayBuffer(44 + n), v = new DataView(buf), w = (o, str) => [...str].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+  const el = AU.keepAlive = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })));
+  el.loop = true; el.setAttribute('playsinline', ''); const pr = el.play(); if (pr && pr.catch) pr.catch(() => { AU.keepAlive = null; });
+}
 function audioStart() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
+  iosPlayback();
   if (!AU.ctx) {
     const a = AU.ctx = new AC();
     const comp = a.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(a.destination);
@@ -297,7 +311,7 @@ function audioStart() {
     const s = a.createBufferSource(); s.buffer = a.createBuffer(1, 1, 22050); s.connect(a.destination); s.start(0);
     Music.init();
   }
-  if (AU.ctx.state === 'suspended') AU.ctx.resume();
+  if (AU.ctx.state !== 'running' && !document.hidden) { const pr = AU.ctx.resume(); if (pr && pr.catch) pr.catch(() => {}); }
 }
 function setAudio(kind, on) {
   AU.opts[kind] = on; saveAudio();
@@ -2093,9 +2107,9 @@ $('musicBtn').addEventListener('click', () => { audioStart(); setAudio('music', 
 $('sfxBtn').addEventListener('click', () => { audioStart(); setAudio('sfx', !AU.opts.sfx); });
 syncAudioBtns();
 // Browsers only allow sound after a gesture: start (or resume) the audio context on the first tap, click or key.
-for (const ev of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(ev, audioStart, { capture: true, passive: true });
+for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) window.addEventListener(ev, audioStart, { capture: true, passive: true });
 document.addEventListener('click', e => { if (e.target.closest('button')) sfx('click'); });
-document.addEventListener('visibilitychange', () => { if (!AU.ctx) return; if (document.hidden) AU.ctx.suspend(); else AU.ctx.resume(); });
+document.addEventListener('visibilitychange', () => { if (!AU.ctx) return; if (document.hidden) { AU.ctx.suspend(); if (AU.keepAlive) AU.keepAlive.pause(); } else { AU.ctx.resume().catch(() => {}); if (AU.keepAlive) AU.keepAlive.play().catch(() => {}); } });
 $('ordersBtn').addEventListener('click', () => setSheet(!document.documentElement.classList.contains('sheet')));
 $('sheetClose').addEventListener('click', () => setSheet(false));
 $('scrim').addEventListener('click', () => setSheet(false));
