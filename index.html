@@ -2,6 +2,11 @@
 <html lang="en">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta charset="utf-8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Whisker Wars">
+<meta name="theme-color" content="#16121f">
 <title>Whisker Wars</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@700;800&family=Alegreya+Sans:wght@400;500;700;800&display=swap">
 <style>
@@ -39,7 +44,8 @@ canvas.tool{cursor:crosshair}
 .group h3{font-family:"Alegreya SC",Georgia,serif;font-weight:800;font-size:16px;letter-spacing:.05em;color:#6b2412;margin:0;padding-bottom:4px;border-bottom:1px solid rgba(125,90,34,.45)}
 .btns{display:flex;flex-wrap:wrap;gap:6px}
 button{font:inherit;font-size:14.5px;font-weight:700;color:#f7e8c8;background:linear-gradient(#8e5d35,#5e3b20);border:1px solid #2e1c0e;box-shadow:inset 0 1px 0 rgba(255,220,170,.35),0 2px 0 rgba(0,0,0,.35);border-radius:7px;padding:5px 11px;cursor:pointer}
-button:hover:not(:disabled){filter:brightness(1.12)}
+@media (hover:hover){button:hover:not(:disabled){filter:brightness(1.12)}}
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 button:focus-visible{outline:2px solid #f5c451;outline-offset:2px}
 button.on{background:linear-gradient(#f7d06a,#d99a2b);color:#3a2206;border-color:#7d5a22}
 button:disabled{opacity:.45;cursor:not-allowed}
@@ -55,6 +61,61 @@ kbd{font:11px/1 ui-monospace,Menlo,monospace;opacity:.72;margin-left:5px}
 .tech button.on .bar i{background:#5a3408}
 .note{font-size:13px;color:var(--parch-muted);margin:0}
 @media (max-width:520px){h1{font-size:30px}.chip{font-size:13px}}
+/* ---------- touch layout (phones & tablets) ---------- */
+.tbar,.sheet-head,.scrim,.t-only,.rotate{display:none}
+html.touch .m-only{display:none}
+html.touch .t-only{display:revert}
+html.touch kbd{display:none}
+html.touch,html.touch body{height:100%;overflow:hidden;overscroll-behavior:none}
+html.touch body{padding:0;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+html.touch .wrap{max-width:none;height:100vh;height:100dvh;gap:0;box-sizing:border-box;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  grid-template:"main" minmax(0,1fr)/minmax(0,1fr)}
+html.touch header{display:none}
+html.touch .stage{grid-area:main;align-self:center;justify-self:center;width:min(100%,calc((100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))*16/9));border-width:2px;border-radius:8px;box-shadow:0 0 0 1px var(--brass-d)}
+html.touch .stats{grid-area:main;align-self:start;justify-self:start;z-index:3;margin:6px;gap:4px;pointer-events:none;max-width:calc(100% - 140px)}
+html.touch .chip{font-size:12px;padding:1px 7px;opacity:.94}
+html.touch .chip.minor{display:none}
+html.touch .hint{grid-area:main;align-self:end;justify-self:center;z-index:3;pointer-events:none;margin:0 10px 58px;font-size:13px;line-height:1.3;text-align:center;color:#f3e6c8;text-shadow:0 1px 2px #000,0 0 6px #000;max-width:min(640px,94%)}
+html.touch .hint.flash{color:#ffe7a8}
+html.touch.menu .hint,html.touch.menu .stats{visibility:hidden}
+html.touch .tbar{grid-area:main;align-self:end;z-index:4;display:flex;align-items:center;gap:6px;padding:6px 8px;pointer-events:none;overflow-x:auto;scrollbar-width:none}
+html.touch .tbar::-webkit-scrollbar{display:none}
+html.touch .tbar>*{pointer-events:auto;flex:none}
+html.touch .tbar[hidden]{display:none}
+.tbar button{min-height:42px;padding:6px 12px;font-size:15px;box-shadow:inset 0 1px 0 rgba(255,220,170,.35),0 3px 8px rgba(0,0,0,.5)}
+.tbar .tctx{display:flex;align-items:center;gap:6px;margin:0 auto}
+.tbar .tctx>span{display:none;gap:6px;align-items:center}
+.tbar[data-mode=idle] .t-idle,.tbar[data-mode=cat] .t-cat,.tbar[data-mode=tool] .t-tool{display:flex}
+.tbar .tname{font-weight:800;color:#f3e6c8;text-shadow:0 1px 2px #000,0 0 6px #000;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbar .go{background:linear-gradient(#a8dc72,#5f9a34);color:#15300a;border-color:#2f5418}
+.tbar .go:disabled{opacity:.45}
+html.touch .dock{position:fixed;z-index:20;top:0;right:0;bottom:0;width:min(380px,58vw);box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;
+  grid-template-columns:1fr;align-content:start;gap:10px;padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) 10px;
+  background:rgba(22,17,32,.97);border-left:3px solid var(--brass);box-shadow:-12px 0 30px rgba(0,0,0,.6);transform:translateX(105%);transition:transform .22s ease;visibility:hidden}
+html.touch.sheet .dock{transform:none;visibility:visible}
+html.touch .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sheet-head h2{margin:0;font-family:"Alegreya SC",Georgia,serif;font-size:22px;color:var(--gold)}
+html.touch .scrim{position:fixed;inset:0;z-index:19;background:rgba(8,5,14,.45)}
+html.touch:not(.sheet) .scrim{display:none}
+html.touch .dock button{min-height:40px;padding:6px 12px}
+html.touch .overlay{padding:8px}
+html.touch .card{padding:14px 16px;gap:8px;font-size:14.5px;line-height:1.35}
+html.touch .card h2{font-size:23px}
+html.touch .card .go{min-height:44px}
+@media (orientation:portrait){
+  html.touch .wrap{grid-template:"stats" auto "main" auto "hint" auto "bar" auto "rot" 1fr/minmax(0,1fr);align-content:start;gap:6px}
+  html.touch .stage{width:100%;align-self:start}
+  html.touch .stats{grid-area:stats;max-width:none;margin:8px 8px 0;pointer-events:auto}
+  html.touch .chip.minor{display:inline}
+  html.touch .hint{grid-area:hint;align-self:start;margin:4px 12px 0}
+  html.touch .tbar{grid-area:bar;align-self:start;flex-wrap:wrap;justify-content:center;overflow:visible}
+  html.touch .tbar .tctx{flex-wrap:wrap;justify-content:center;order:-1;width:100%}
+  html.touch .tbar .tctx>span{flex-wrap:wrap;justify-content:center}
+  html.touch .rotate{display:block;grid-area:rot;text-align:center;color:var(--muted);font-size:14px;margin:18px 16px}
+  html.touch .dock{top:auto;left:0;width:auto;max-height:72dvh;border-left:0;border-top:3px solid var(--brass);border-radius:14px 14px 0 0;transform:translateY(105%)}
+}
+
 </style>
 
 <div class="wrap">
@@ -72,11 +133,12 @@ kbd{font:11px/1 ui-monospace,Menlo,monospace;opacity:.72;margin-left:5px}
         <h2>The wizards want your cats</h2>
         <p>Across the stream, two wizard towers are recruiting apprentices to collect the cats of Mothwick as familiars. You have about three minutes before the first raid.</p>
         <ul>
-          <li><b>Drag a cat</b> to pick it up. Drop it on a <b>Dojo</b> (Scrapper), a <b>Workshop</b> (Tinker) or a <b>bed</b> (Tabby). Or click a cat and press <b>1–4</b>.</li>
-          <li><b>Click a bed</b> to pull a cat out. Tabbies in beds breed kittens.</li>
+          <li><b>Drag a cat</b> to pick it up. Drop it on a <b>Dojo</b> (Scrapper), a <b>Workshop</b> (Tinker) or a <b>bed</b> (Tabby). <span class="m-only">Or click a cat and press <b>1–4</b>.</span><span class="t-only">Or tap a cat and pick a job at the bottom.</span></li>
+          <li><b><span class="m-only">Click</span><span class="t-only">Tap</span> a bed</b> to pull a cat out. Tabbies in beds breed kittens.</li>
           <li><b>Watch for glowing runes.</b> A wizard's spell lands where the rune is. Drag a cat out of it to dodge. Hitting a wizard mid-cast can make it fizzle.</li>
           <li>Cats working alone get scared of wizards. <b>Scrappers protect them</b>, fight better in packs, and rank up as they win.</li>
-          <li>Drag empty ground or use WASD to look around. Scroll or pinch to zoom.</li>
+          <li class="m-only">Drag empty ground or use WASD to look around. Scroll or pinch to zoom.</li>
+          <li class="t-only">Drag empty ground to look around. Pinch with two fingers to zoom. <b>Orders</b> opens research and settings.</li>
         </ul>
         <button class="go" id="startBtn">Start level</button>
       </div>
@@ -84,7 +146,37 @@ kbd{font:11px/1 ui-monospace,Menlo,monospace;opacity:.72;margin-left:5px}
   </div>
   <p class="hint" id="hint"></p>
 
-  <div class="dock">
+  <div class="tbar" id="tbar" data-mode="idle" hidden>
+    <button id="ordersBtn">Orders</button>
+    <div class="tctx">
+      <span class="t-idle">
+        <button data-tool="bed">Box</button>
+        <button data-tool="dojo">Dojo</button>
+        <button data-tool="workshop">Workshop</button>
+        <button data-tool="yarn">Yarn ×0</button>
+        <button data-tool="catnip">Catnip ×0</button>
+      </span>
+      <span class="t-cat">
+        <span class="tname" id="tname"></span>
+        <button data-role="tabby">Tabby</button>
+        <button data-role="builder">Builder</button>
+        <button data-role="scrapper">Scrapper</button>
+        <button data-role="tinker">Tinker</button>
+      </span>
+      <span class="t-tool">
+        <button class="go" id="placeBtn">Place</button>
+        <button id="keepBtn" aria-pressed="false">Keep placing</button>
+        <button id="cancelBtn">Cancel</button>
+      </span>
+    </div>
+    <button id="tPauseBtn">Pause</button>
+    <button id="tHomeBtn">Home</button>
+  </div>
+  <p class="rotate">Turn your device sideways for a bigger battlefield.</p>
+  <div class="scrim" id="scrim"></div>
+
+  <div class="dock" id="dock">
+    <div class="sheet-head"><h2>Orders</h2><button id="sheetClose">Close</button></div>
     <section class="group">
       <h3>Selected cat</h3>
       <div class="sel" id="selInfo">Click a cat to select it.</div>
@@ -122,6 +214,7 @@ kbd{font:11px/1 ui-monospace,Menlo,monospace;opacity:.72;margin-left:5px}
         <button id="zoomIn" aria-label="Zoom in">+</button>
         <button id="homeBtn">Home<kbd>H</kbd></button>
         <button id="restartBtn">Restart</button>
+        <button id="fsBtn" hidden>Full screen</button>
       </div>
     </section>
   </div>
@@ -174,6 +267,9 @@ function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Ma
 const cv = document.getElementById('game'), ctx = cv.getContext('2d');
 const $ = id => document.getElementById(id);
 const overlay = $('overlay'), hint = $('hint');
+const TOUCH = (() => { const q = new URLSearchParams(location.search).get('touch'); if (q === '1') return true; if (q === '0') return false; return matchMedia('(hover: none) and (pointer: coarse)').matches; })();
+document.documentElement.classList.toggle('touch', TOUCH);
+const tx = (mouse, touch) => TOUCH ? touch : mouse;
 let UID = 0, G;
 const cam = { x: HOME.x + 140, y: HOME.y - 60, z: 1 };
 
@@ -457,7 +553,7 @@ function newGame() {
   G = { t: 0, cats: [], wiz: [], blds: [], towers: [], traps: [], shots: [], fx: [], floats: [], beams: [], strays: [],
     prog: { yarn: 0, hairball: 0, catnip: 0 }, done: {}, current: 'yarn', craftT: 0, tray: { yarn: 0, catnip: 0 }, craftNext: 0, power: 0,
     waveT: 180, waveN: 0, mustering: false, banner: null, over: null, paused: true, speed: 1, sel: null, held: null, tool: null,
-    px: -99, py: -99, sx: -99, sy: -99, msg: '', msgT: 0, stats: { born: 0, wizDown: 0, livesLost: 0, dodged: 0 } };
+    px: -99, py: -99, sx: -99, sy: -99, ghost: null, keep: false, msg: '', msgT: 0, stats: { born: 0, wizDown: 0, livesLost: 0, dodged: 0 } };
   const b = addBld('bed', HOME.x, HOME.y, true); b.tier = 1; b.r = BED_R[1]; b.maxHp = b.hp = BED_HP[1];
   for (let i = 0; i < 4; i++) { const c = addCat(HOME.x - 45 + i * 30, HOME.y + 70); c.ax = c.x; c.ay = c.y; }
   G.towers.push(
@@ -962,7 +1058,7 @@ function drawLighting(ox, oy) {
 }
 function drawBanner(text, danger) {
   ctx.font = '800 23px "Alegreya SC", Georgia, serif';
-  const w = ctx.measureText(text).width + 64, x0 = VW / 2 - w / 2, y0 = 14, h = 42;
+  const w = ctx.measureText(text).width + 64, x0 = VW / 2 - w / 2, y0 = TOUCH ? 76 : 14, h = 42;
   ctx.fillStyle = danger ? '#6e1d16' : '#7a5a2e';
   for (const sgn of [-1, 1]) { const ex = sgn < 0 ? x0 : x0 + w; ctx.beginPath(); ctx.moveTo(ex - sgn * 12, y0 + 9); ctx.lineTo(ex + sgn * 26, y0 + 9); ctx.lineTo(ex + sgn * 14, y0 + h / 2 + 9); ctx.lineTo(ex + sgn * 26, y0 + h + 9); ctx.lineTo(ex - sgn * 12, y0 + h + 9); ctx.closePath(); ctx.fill(); }
   const g = ctx.createLinearGradient(0, y0, 0, y0 + h); g.addColorStop(0, danger ? '#f0c0ad' : '#f7e8c6'); g.addColorStop(1, danger ? '#c8745c' : '#d9bf88');
@@ -1476,16 +1572,17 @@ function render() {
     else { ctx.globalAlpha = a; ctx.fillStyle = p.color; ctx.beginPath(); if (p.kind === 'star') { for (let i = 0; i < 5; i++) { const an = i * 1.2566 - 1.57; ctx.lineTo(p.x + Math.cos(an) * p.size * 1.7, p.y + Math.sin(an) * p.size * 1.7); ctx.lineTo(p.x + Math.cos(an + .628) * p.size * .6, p.y + Math.sin(an + .628) * p.size * .6); } } else ctx.arc(p.x, p.y, p.size, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
   }
   if (G.held) drawCat(G.held, t);
-  if (G.tool && G.px > 0) {
+  const gp = G.ghost || (!TOUCH && G.px > 0 ? { x: G.px, y: G.py } : null);
+  if (G.tool && gp) {
     const tl = G.tool;
     if (tl === 'bed' || tl === 'dojo' || tl === 'workshop') {
-      const r = tl === 'bed' ? 36 : 42, ok = validSite(G.px, G.py, r);
+      const r = tl === 'bed' ? 36 : 42, ok = validSite(gp.x, gp.y, r);
       ctx.fillStyle = ok ? 'rgba(143,200,95,.3)' : 'rgba(234,106,88,.3)'; ctx.strokeStyle = ok ? '#b8e07a' : '#ea6a58'; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.ellipse(G.px, G.py - 4, r + 10, r * .38 + 8, 0, 0, 7); ctx.fill(); ctx.stroke();
-      label(ok ? 'Place ' + (tl === 'bed' ? 'Cardboard Box' : tl === 'dojo' ? 'Dojo' : 'Workshop') : 'Can’t build here', G.px, G.py - 50, ok ? '#f3e6c8' : '#ffb0a3', 15);
-    } else if (tl === 'catnip') { ctx.strokeStyle = '#f2a3d6'; ctx.setLineDash([6, 6]); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(G.px, G.py, 110, 50, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
-    else if (tl === 'yarn') drawTrap({ x: G.px, y: G.py }, true);
-    else if (tl === 'upgrade') label('Click a bed to upgrade it', G.px, G.py - 24, '#d4c6ff', 15);
+      ctx.beginPath(); ctx.ellipse(gp.x, gp.y - 4, r + 10, r * .38 + 8, 0, 0, 7); ctx.fill(); ctx.stroke();
+      label(ok ? 'Place ' + (tl === 'bed' ? 'Cardboard Box' : tl === 'dojo' ? 'Dojo' : 'Workshop') : 'Can’t build here', gp.x, gp.y - 50, ok ? '#f3e6c8' : '#ffb0a3', 15);
+    } else if (tl === 'catnip') { ctx.strokeStyle = '#f2a3d6'; ctx.setLineDash([6, 6]); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(gp.x, gp.y, 110, 50, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
+    else if (tl === 'yarn') drawTrap({ x: gp.x, y: gp.y }, true);
+    else if (tl === 'upgrade') label(tx('Click a bed to upgrade it', 'Tap a bed to upgrade it'), gp.x, gp.y - 24, '#d4c6ff', 15);
   }
   drawSunbeam(t);
   if (!reduced) drawLeaves();
@@ -1509,7 +1606,7 @@ function render() {
   drawMinimap();
   if (G.paused && !G.over && overlay.hidden) { ctx.fillStyle = 'rgba(14,9,22,.5)'; ctx.fillRect(0, 0, VW, VH); drawBanner('Paused', false); }
 }
-const MM = { x: VW - 216, y: VH - 136, w: 200, h: 120 };
+const MM = { x: VW - 216, y: TOUCH ? 16 : VH - 136, w: 200, h: 120 };
 function drawMinimap() {
   ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 12;
   const g = ctx.createLinearGradient(MM.x, MM.y, MM.x + MM.w, MM.y + MM.h); g.addColorStop(0, '#f0c66a'); g.addColorStop(.5, '#8a6224'); g.addColorStop(1, '#e0ae52');
@@ -1532,63 +1629,88 @@ function toScreen(e) { const r = cv.getBoundingClientRect(); return { x: (e.clie
 function toWorldS(s) { return { x: cam.x + (s.x - VW / 2) / cam.z, y: cam.y + (s.y - VH / 2) / cam.z }; }
 function inMini(s) { return s.x >= MM.x && s.x <= MM.x + MM.w && s.y >= MM.y && s.y <= MM.y + MM.h; }
 function miniTo(s) { cam.x = (s.x - MM.x) / MM.w * WW; cam.y = (s.y - MM.y) / MM.h * WH; clampCam(); }
-function catAt(p) { let best = null, bd = 30; for (const c of G.cats) { if (c.state === 'inBed' || c.state === 'frog' || c.state === 'flying') continue; const d = Math.hypot(c.x + 4 - p.x, c.y - 20 - p.y); if (d < bd) { bd = d; best = c; } } return best; }
-function bldAt(p) { for (const b of G.blds) { if (Math.hypot(b.x - p.x, (b.y - 24) - p.y) < b.r + 18) return b; } return null; }
+function cssK() { return VW / (cv.getBoundingClientRect().width || VW); }
+function catAt(p, rad = 30) { let best = null, bd = rad; for (const c of G.cats) { if (c.state === 'inBed' || c.state === 'frog' || c.state === 'flying') continue; const d = Math.hypot(c.x + 4 - p.x, c.y - 20 - p.y); if (d < bd) { bd = d; best = c; } } return best; }
+function bldAt(p, pad = 18) { for (const b of G.blds) { if (Math.hypot(b.x - p.x, (b.y - 24) - p.y) < b.r + pad) return b; } return null; }
 const pointers = new Map();
-let down = null, samples = [], pan = null, pinch = null, miniDrag = false, keyShift = false;
+let down = null, samples = [], pan = null, pinch = null, miniDrag = false, keyShift = false, lift = 0, tapMax = 6, ghostDrag = null;
 cv.addEventListener('contextmenu', e => { e.preventDefault(); setTool(null); });
 cv.addEventListener('wheel', e => {
   e.preventDefault(); const s = toScreen(e), before = toWorldS(s);
   cam.z = clamp(cam.z * Math.exp(-e.deltaY * .0015), .64, 1.6);
   const after = toWorldS(s); cam.x += before.x - after.x; cam.y += before.y - after.y; clampCam();
 }, { passive: false });
+function pinchInfo() { const [a, b] = [...pointers.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }; }
 cv.addEventListener('pointerdown', e => {
   if (G.over || !overlay.hidden || e.button === 2) return;
   const s = toScreen(e); pointers.set(e.pointerId, s);
   try { cv.setPointerCapture(e.pointerId); } catch (_) {}
   if (pointers.size === 2) {
-    if (G.held) dropHeldInPlace(); pan = null;
-    const [a, b] = [...pointers.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, z: cam.z }; return;
+    if (G.held) dropHeldInPlace(); pan = null; ghostDrag = null; miniDrag = false;
+    const pi = pinchInfo(); pinch = { d: pi.d, z: cam.z, w: toWorldS(pi.m) }; return;
   }
+  if (pointers.size > 2) return;
+  // Fingers are fat: widen grab radii, raise the tap threshold, and float a held cat above the fingertip.
+  const touch = e.pointerType === 'touch', k = cssK();
+  lift = touch ? 40 * k : 0; tapMax = touch ? 14 * k : 6;
   if (inMini(s)) { miniDrag = true; miniTo(s); return; }
   const p = toWorldS(s); G.px = p.x; G.py = p.y; G.sx = s.x; G.sy = s.y;
-  if (G.tool) { useTool(p, e.shiftKey); return; }
-  let c = catAt(p);
-  if (!c) { const b = bldAt(p); if (b && b.type === 'bed' && b.occ.length) { c = b.occ[b.occ.length - 1]; leaveBed(c); } }
+  if (G.tool) {
+    if (TOUCH && G.tool !== 'upgrade') {
+      // Touch placement: a tap moves the ghost, dragging nudges it, and the Place button commits.
+      const near = G.ghost && Math.hypot(G.ghost.x - p.x, G.ghost.y - 20 - p.y) < 60 * k / cam.z;
+      if (!near) G.ghost = { x: p.x, y: p.y };
+      ghostDrag = { sx: s.x, sy: s.y, gx: G.ghost.x, gy: G.ghost.y };
+      syncBar(); return;
+    }
+    useTool(p, e.shiftKey); return;
+  }
+  let c = catAt(p, touch ? Math.max(30, 30 * k / cam.z) : 30);
+  if (!c) { const b = bldAt(p, touch ? Math.max(18, 14 * k / cam.z) : 18); if (b && b.type === 'bed' && b.occ.length) { c = b.occ[b.occ.length - 1]; leaveBed(c); } }
   if (c) {
     c.prev = c.state === 'swap' ? 'swap' : 'idle'; c.state = 'held'; c.stun = 0; G.held = c; G.sel = c; c.scared = 0;
-    c.x = p.x; c.y = p.y + 20;
-    down = { x: s.x, y: s.y }; samples = [{ x: p.x, y: p.y, t: performance.now() }];
+    const q = toWorldS({ x: s.x, y: s.y - lift }); c.x = q.x; c.y = q.y + 20;
+    down = { x: s.x, y: s.y }; samples = [{ x: q.x, y: q.y, t: performance.now() }];
+    hud();
   } else pan = { sx: s.x, sy: s.y, cx: cam.x, cy: cam.y, moved: false };
 });
 cv.addEventListener('pointermove', e => {
   const s = toScreen(e);
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, s);
-  if (pinch && pointers.size === 2) { const [a, b] = [...pointers.values()]; cam.z = clamp(pinch.z * (Math.hypot(a.x - b.x, a.y - b.y) / pinch.d), .64, 1.6); clampCam(); return; }
+  if (pinch) {
+    if (pointers.size !== 2) return;
+    // Two fingers zoom and pan together: the world point under the midpoint stays under it.
+    const pi = pinchInfo(); cam.z = clamp(pinch.z * (pi.d / pinch.d), .64, 1.6);
+    cam.x = pinch.w.x - (pi.m.x - VW / 2) / cam.z; cam.y = pinch.w.y - (pi.m.y - VH / 2) / cam.z; clampCam(); return;
+  }
   if (miniDrag) { miniTo(s); return; }
+  if (ghostDrag) { G.ghost.x = clamp(ghostDrag.gx + (s.x - ghostDrag.sx) / cam.z, 20, WW - 20); G.ghost.y = clamp(ghostDrag.gy + (s.y - ghostDrag.sy) / cam.z, 40, WH - 16); return; }
   const p = toWorldS(s); G.px = p.x; G.py = p.y; G.sx = s.x; G.sy = s.y;
   if (G.held) {
-    G.held.x = clamp(p.x, 14, WW - 14); G.held.y = clamp(p.y + 20, 50, WH - 12);
-    const now = performance.now(); samples.push({ x: p.x, y: p.y, t: now }); while (samples.length > 2 && now - samples[0].t > 90) samples.shift();
+    const q = lift ? toWorldS({ x: s.x, y: s.y - lift }) : p;
+    G.held.x = clamp(q.x, 14, WW - 14); G.held.y = clamp(q.y + 20, 50, WH - 12);
+    const now = performance.now(); samples.push({ x: q.x, y: q.y, t: now }); while (samples.length > 2 && now - samples[0].t > 90) samples.shift();
   } else if (pan) {
-    const dx = s.x - pan.sx, dy = s.y - pan.sy; if (Math.hypot(dx, dy) > 5) pan.moved = true;
+    const dx = s.x - pan.sx, dy = s.y - pan.sy; if (Math.hypot(dx, dy) > tapMax) pan.moved = true;
     if (pan.moved) { cam.x = pan.cx - dx / cam.z; cam.y = pan.cy - dy / cam.z; clampCam(); }
   }
 });
-cv.addEventListener('pointerleave', () => { if (!G.held) { G.px = -99; G.py = -99; G.sx = -99; } });
+cv.addEventListener('pointerleave', e => { if (!G.held && e.pointerType !== 'touch') { G.px = -99; G.py = -99; G.sx = -99; } });
 function dropHeldInPlace() { const c = G.held; if (!c) return; G.held = null; c.state = c.prev === 'swap' ? 'swap' : 'idle'; c.ax = c.x; c.ay = c.y; c.linger = 1.5; if (inWater(c.x, c.y)) splash(c); }
 function release(e) {
-  pointers.delete(e.pointerId);
+  if (!pointers.delete(e.pointerId)) return;
   if (pinch) { if (pointers.size < 2) pinch = null; return; }
+  if (e.pointerType === 'touch') G.sx = -99;
   if (miniDrag) { miniDrag = false; return; }
-  if (pan) { if (!pan.moved) G.sel = null; pan = null; return; }
+  if (ghostDrag) { ghostDrag = null; syncBar(); return; }
+  if (pan) { if (!pan.moved) { G.sel = null; hud(); } pan = null; return; }
   const c = G.held; if (!c) return; G.held = null;
-  const s = toScreen(e), p = toWorldS(s), now = performance.now();
+  const s = toScreen(e), p = toWorldS({ x: s.x, y: s.y - lift }), now = performance.now();
   const s0 = samples[0] || { x: p.x, y: p.y, t: now }, dtm = Math.max(16, now - s0.t);
   const vx = (p.x - s0.x) / dtm * 1000, vy = (p.y - s0.y) / dtm * 1000, spd = Math.hypot(vx, vy);
   const moved = down ? Math.hypot(s.x - down.x, s.y - down.y) : 99;
   c.state = c.prev === 'swap' ? 'swap' : 'idle'; c.ax = c.x; c.ay = c.y; c.idleFor = 0; c.linger = 1.5;
-  if (moved < 6) { G.sel = c; return; }
+  if (moved < tapMax) { G.sel = c; hud(); return; }
   if (spd > 1100 && now - samples[samples.length - 1].t < 60) {
     const k = Math.min(1, 420 / (spd * .32));
     c.state = 'flying'; c.ft = 0; c.fdur = .5; c.fx0 = c.x; c.fy0 = c.y; c.face = vx < 0 ? -1 : 1;
@@ -1613,10 +1735,10 @@ function useTool(p, shift) {
     if (!validSite(p.x, p.y, r)) { say('Build on open ground on the village side, clear of other buildings.'); return; }
     addBld(t, p.x, p.y, false);
     say(G.cats.some(c => c.role === 'builder' || (c.state === 'swap' && c.swapTo === 'builder')) ? 'Site placed. Your Builders are on their way.' : 'Site placed. Give a cat the Builder job to start construction.');
-    if (!shift && !keyShift) setTool(null);
+    if (!shift && !keyShift && !G.keep) setTool(null);
   } else if (t === 'upgrade') {
     const b = bldAt(p);
-    if (!b || b.type !== 'bed' || !b.done) { say('Click a finished cat bed to upgrade it.'); return; }
+    if (!b || b.type !== 'bed' || !b.done) { say(tx('Click', 'Tap') + ' a finished cat bed to upgrade it.'); return; }
     if (b.tier >= 2) { say('That Cat Tree is already fully upgraded.'); return; }
     b.upgWant = true; float(b.x, b.y - 80, 'Upgrade queued', '#d4c6ff');
     if (!G.cats.some(c => c.role === 'builder')) say('Upgrade queued. It needs a Builder.');
@@ -1652,12 +1774,38 @@ window.addEventListener('keyup', e => { keyShift = e.shiftKey; keys.delete(e.key
 window.addEventListener('blur', () => keys.clear());
 function zoomBy(f) { cam.z = clamp(cam.z * f, .64, 1.6); clampCam(); }
 function goHome() { const b = G.blds.find(x => x.type === 'bed') || HOME; cam.x = b.x + 140; cam.y = b.y - 60; clampCam(); }
-function assign(role) { if (!G.sel) { say('Select a cat first: click one, or click a bed to pull one out.'); return; } startSwap(G.sel, role); hud(); }
+function assign(role) { if (!G.sel) { say(tx('Select a cat first: click one, or click a bed to pull one out.', 'Select a cat first: tap one, or tap a bed to pull one out.')); return; } startSwap(G.sel, role); hud(); }
 function setTool(t) {
   if ((t === 'yarn' || t === 'catnip') && G.tray[t] <= 0) { say(G.done[t] ? 'None crafted yet. Tinkers craft gadgets over time.' : 'Research it first.'); t = null; }
-  G.tool = t; cv.classList.toggle('tool', !!t);
+  G.tool = t; G.ghost = null; cv.classList.toggle('tool', !!t);
+  if (!t) G.keep = false;
+  else if (TOUCH) { if (t !== 'upgrade') G.ghost = { x: cam.x, y: cam.y + 40 }; setSheet(false); }
   document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
-  refreshHint();
+  syncBar(); refreshHint();
+}
+function placeGhost() {
+  if (!G.tool || !G.ghost) return;
+  const t = G.tool, g = { x: G.ghost.x, y: G.ghost.y }; useTool(g, false);
+  if (G.tool === t && G.ghost) G.ghost = { x: g.x + 90, y: g.y };
+  syncBar();
+}
+function setSheet(open) { document.documentElement.classList.toggle('sheet', open); }
+const tbar = $('tbar'), BUILD_R = { bed: 36, dojo: 42, workshop: 42 };
+function syncBar() {
+  if (!TOUCH) return;
+  tbar.hidden = !overlay.hidden || !!G.over;
+  document.documentElement.classList.toggle('menu', tbar.hidden);
+  const mode = G.tool ? 'tool' : G.sel ? 'cat' : 'idle';
+  tbar.dataset.mode = mode;
+  if (mode === 'cat') $('tname').textContent = G.sel.name;
+  if (mode === 'tool') {
+    const t = G.tool, pb = $('placeBtn'), kb = $('keepBtn'), g = G.ghost;
+    pb.hidden = t === 'upgrade'; kb.hidden = t === 'upgrade' || t === 'catnip';
+    pb.textContent = t === 'catnip' ? 'Burst!' : t === 'yarn' ? 'Hide trap' : 'Place';
+    pb.disabled = !g || (BUILD_R[t] ? !validSite(g.x, g.y, BUILD_R[t]) : t === 'yarn' && inWater(g.x, g.y));
+    kb.classList.toggle('on', G.keep); kb.setAttribute('aria-pressed', G.keep);
+  }
+  $('tPauseBtn').textContent = G.paused && !G.over ? 'Resume' : 'Pause';
 }
 
 /* ================= HUD ================= */
@@ -1665,7 +1813,14 @@ function say(m) { G.msg = m; G.msgT = 5; refreshHint(); }
 function refreshHint() {
   if (G.msgT > 0) { hint.textContent = G.msg; hint.classList.add('flash'); return; }
   hint.classList.remove('flash');
-  const tips = {
+  const tips = TOUCH ? {
+    bed: 'Tap open ground on the village side to move the Cardboard Box, drag to nudge it, then press Place.',
+    dojo: 'Tap where the Dojo should go, drag to nudge it, then press Place. Drop cats on it to make Scrappers.',
+    workshop: 'Tap where the Junk Workshop should go, then press Place. Drop cats on it to make Tinkers.',
+    upgrade: 'Tap a cat bed to queue an upgrade: Box → Basket Nook → Cat Tree.',
+    yarn: 'Tap where to hide the Yarn Tripwire, then press Hide trap. The first wizard to step on it is tangled for 5 s.',
+    catnip: 'Tap to aim the Catnip Bomb, then press Burst! Wizards inside the circle are dazed and hurt.',
+  } : {
     bed: 'Click open ground on the village side to place a Cardboard Box. Hold Shift to place several.',
     dojo: 'Click to place a Dojo. Drop cats on it to make Scrappers.',
     workshop: 'Click to place a Junk Workshop. Drop cats on it to make Tinkers.',
@@ -1673,12 +1828,12 @@ function refreshHint() {
     yarn: 'Click to hide a Yarn Tripwire. The first wizard to step on it is tangled for 5 s.',
     catnip: 'Click to burst a Catnip Bomb. Wizards inside the circle are dazed and hurt.',
   };
-  if (G.tool) { hint.textContent = tips[G.tool] + ' Right-click or Esc to cancel.'; return; }
+  if (G.tool) { hint.textContent = tips[G.tool] + tx(' Right-click or Esc to cancel.', ''); return; }
   const n = G.cats.length, cap = colonyCap();
-  if (!G.cats.some(c => c.role === 'builder')) hint.textContent = 'Tip: click the basket to pull a cat out, then press 2 to make it a Builder.';
+  if (!G.cats.some(c => c.role === 'builder')) hint.textContent = tx('Tip: click the basket to pull a cat out, then press 2 to make it a Builder.', 'Tip: tap the basket to pull a cat out, then tap Builder to give it the job.');
   else if (n >= cap) hint.textContent = 'Your beds are full, so breeding has stopped. Build another Cardboard Box or upgrade a bed.';
-  else if (!G.blds.some(b => b.type === 'dojo')) hint.textContent = 'Tip: build a Dojo (F). Scrappers protect working cats and fight better in packs of three.';
-  else if (!G.blds.some(b => b.type === 'workshop')) hint.textContent = 'Tip: a Junk Workshop (R) lets Tinkers research traps and gadgets.';
+  else if (!G.blds.some(b => b.type === 'dojo')) hint.textContent = tx('Tip: build a Dojo (F).', 'Tip: build a Dojo.') + ' Scrappers protect working cats and fight better in packs of three.';
+  else if (!G.blds.some(b => b.type === 'workshop')) hint.textContent = tx('Tip: a Junk Workshop (R)', 'Tip: a Junk Workshop') + ' lets Tinkers research traps and gadgets.';
   else if (G.strays.length) hint.textContent = 'Stray cats (?) are waiting around the map. Walk any cat to one to recruit it.';
   else hint.textContent = 'Drag cats out of glowing runes to dodge spells. Send a pack of Scrappers over the bridge to attack a tower.';
 }
@@ -1695,16 +1850,16 @@ function hud() {
   const raiders = G.wiz.filter(w => w.mode === 'raid').length;
   statsEl.innerHTML =
     `<span class="chip${n >= cap ? ' warn' : ''}">Cats <b>${n} / ${cap}</b></span>` +
-    `<span class="chip">Tabbies <b>${cnt.tabby}</b></span><span class="chip">Builders <b>${cnt.builder}</b></span>` +
-    `<span class="chip">Scrappers <b>${cnt.scrapper}</b></span><span class="chip">Tinkers <b>${cnt.tinker}</b></span>` +
+    `<span class="chip minor">Tabbies <b>${cnt.tabby}</b></span><span class="chip minor">Builders <b>${cnt.builder}</b></span>` +
+    `<span class="chip minor">Scrappers <b>${cnt.scrapper}</b></span><span class="chip minor">Tinkers <b>${cnt.tinker}</b></span>` +
     `<span class="chip${raiders ? ' warn' : ''}">Wizards <b>${G.wiz.length}</b>${raiders ? ` · raiding <b>${raiders}</b>` : ''}</span><span class="chip">Tower HP <b>${towers}</b></span>` +
-    `<span class="chip${G.mustering ? ' warn' : ''}">${G.mustering ? 'Crossing in' : 'Next wave'} <b>${fmt(G.waveT)}</b></span><span class="chip">Time <b>${fmt(G.t)}</b></span>`;
+    `<span class="chip${G.mustering ? ' warn' : ''}">${G.mustering ? 'Crossing in' : 'Next wave'} <b>${fmt(G.waveT)}</b></span><span class="chip minor">Time <b>${fmt(G.t)}</b></span>`;
   const c = G.sel;
   if (c) {
     const doing = c.state === 'swap' ? 'changing to ' + ROLE[c.swapTo].name : c.state === 'held' ? 'held by the scruff' : c.state === 'frog' ? 'a frog, hopping home' : c.stun > 0 ? (c.stunKind === 'sleep' ? 'asleep' : 'dizzy') : c.scared > 0 ? 'scared!' : c.working ? 'working' : c.moving ? 'on the move' : 'idle';
     const extra = c.role === 'scrapper' ? ` · rank ${c.rank} (${c.xp} poofs) · pack ${packOf(c)}` : '';
     selInfo.innerHTML = `<b>${c.name}</b>, ${COATS[c.coat].n} ${ROLE[c.role].name} · ${Math.max(0, Math.ceil(c.hp))}/${c.maxHp} HP · ${c.lives} lives${extra} · ${doing}`;
-  } else selInfo.textContent = 'Click a cat to select it, or drag one onto a building to change its job.';
+  } else selInfo.textContent = tx('Click', 'Tap') + ' a cat to select it, or drag one onto a building to change its job.';
   document.querySelectorAll('[data-role]').forEach(b => { b.disabled = !c; b.classList.toggle('on', !!c && (c.state === 'swap' ? c.swapTo : c.role) === b.dataset.role); });
   techEl.querySelectorAll('[data-tech]').forEach(b => {
     const t = TECHS.find(x => x.id === b.dataset.tech), done = G.done[t.id];
@@ -1712,11 +1867,11 @@ function hud() {
     b.querySelector('i').style.width = (done ? 100 : Math.min(100, G.prog[t.id] / t.cost * 100)) + '%';
     b.querySelector('small').textContent = done ? 'Researched · ' + t.desc : (G.current === t.id ? (G.power ? `Researching · ${G.power} tinker${G.power > 1 ? 's' : ''} working` : 'Next up · needs a Workshop with a Tinker') : t.desc);
   });
-  $('yarnBtn').firstChild.textContent = 'Yarn Tripwire ×' + G.tray.yarn;
-  $('catnipBtn').firstChild.textContent = 'Catnip Bomb ×' + G.tray.catnip;
-  $('yarnBtn').disabled = !G.done.yarn; $('catnipBtn').disabled = !G.done.catnip;
+  for (const [id, long, short] of [['yarn', 'Yarn Tripwire', 'Yarn'], ['catnip', 'Catnip Bomb', 'Catnip']])
+    document.querySelectorAll(`[data-tool=${id}]`).forEach(b => { b.firstChild.textContent = (b.closest('.tbar') ? short : long) + ' ×' + G.tray[id]; b.disabled = !G.done[id]; });
   $('pauseBtn').firstChild.textContent = G.paused && !G.over ? 'Resume' : 'Pause';
   $('speedBtn').textContent = 'Speed ' + G.speed + '×';
+  syncBar();
 }
 function togglePause() { if (G.over || !overlay.hidden) return; G.paused = !G.paused; hud(); }
 function restart() { newGame(); G.paused = false; overlay.hidden = true; setTool(null); hud(); refreshHint(); }
@@ -1725,7 +1880,28 @@ $('speedBtn').addEventListener('click', () => { G.speed = G.speed === 1 ? 2 : 1;
 $('zoomIn').addEventListener('click', () => zoomBy(1.15));
 $('zoomOut').addEventListener('click', () => zoomBy(1 / 1.15));
 $('homeBtn').addEventListener('click', goHome);
-$('restartBtn').addEventListener('click', restart);
+$('restartBtn').addEventListener('click', () => { setSheet(false); restart(); });
+$('ordersBtn').addEventListener('click', () => setSheet(!document.documentElement.classList.contains('sheet')));
+$('sheetClose').addEventListener('click', () => setSheet(false));
+$('scrim').addEventListener('click', () => setSheet(false));
+$('placeBtn').addEventListener('click', placeGhost);
+$('keepBtn').addEventListener('click', () => { G.keep = !G.keep; syncBar(); });
+$('cancelBtn').addEventListener('click', () => setTool(null));
+$('tPauseBtn').addEventListener('click', togglePause);
+$('tHomeBtn').addEventListener('click', goHome);
+// Phones: pause when the player switches away so wizards don't raid an unattended village.
+document.addEventListener('visibilitychange', () => { if (document.hidden && !G.paused && !G.over && overlay.hidden) togglePause(); });
+{
+  const de = document.documentElement, fsReq = de.requestFullscreen || de.webkitRequestFullscreen, fsBtn = $('fsBtn');
+  if (fsReq) {
+    fsBtn.hidden = false;
+    fsBtn.addEventListener('click', () => {
+      if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else { const r = fsReq.call(de); if (r && r.catch) r.catch(() => {}); }
+      setSheet(false);
+    });
+  }
+}
 $('startBtn').addEventListener('click', () => { overlay.hidden = true; G.paused = false; hud(); refreshHint(); });
 function end(win, why) {
   if (G.over) return; G.over = win ? 'win' : 'lose'; G.paused = true; G.held = null; setTool(null);

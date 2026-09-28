@@ -15,6 +15,16 @@ A playable browser prototype of **Whisker Wars**, a real-time god-strategy game 
 - Fling a cat fast to toss it at a wizard.
 - To move around, drag empty ground, use WASD or the arrow keys, or drag the minimap. Scroll or pinch to zoom, press H for home and Space to pause.
 
+### On a phone or tablet
+
+On a touchscreen the game fills the screen, and a bar along the bottom holds the controls. Landscape works best.
+
+- **Tap a cat**, then tap a job (Tabby, Builder, Scrapper, Tinker) in the bar. Dragging a cat lifts it above your finger so you can see where you're dropping it.
+- **To build**, tap Box, Dojo or Workshop, tap where it should go (drag to nudge it), then press **Place**. **Keep placing** lets you place several, and **Cancel** stops.
+- **Orders** opens research, bed upgrades, speed, restart and full screen.
+- Drag empty ground to look around. Pinch with two fingers to zoom and pan.
+- The game pauses itself when you switch apps. On iPhone, use **Share → Add to Home Screen** to play full screen.
+
 To win, topple both wizard towers. You lose if every cat uses up its nine lives, or if your last bed is destroyed.
 
 ## Tech
