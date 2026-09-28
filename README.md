@@ -26,7 +26,42 @@ On a touchscreen the game fills the screen, and a bar along the bottom holds the
 - Drag empty ground to look around. Pinch with two fingers to zoom and pan.
 - The game pauses itself when you switch apps. On iPhone, use **Share → Add to Home Screen** to play full screen.
 
-To win, topple both wizard towers. You lose if every cat uses up its nine lives, or if your last bed is destroyed.
+### Campaign
+
+Five levels, unlocked in order. Your stars and unlocks are saved in the browser.
+
+| # | Level | Twist |
+|---|---|---|
+| 1 | The Village Green | The tutorial: topple both towers |
+| 2 | Twin Bridges | Raids pick one of two bridges; mud; teleporting Trickster wizards |
+| 3 | The Moat | No bridge: survive 7 raids, or glide cats over to topple the towers |
+| 4 | The Herb Garden | Three towers, the full invention tree |
+| 5 | The Wizard's Tower | Boss: break two rune pylons to drop the Grand Tower's shield, dodge meteors, beat the Grand Wizard |
+
+You lose if every cat uses up its nine lives, or if your last bed is destroyed. Stars: win, finish under the level's par time, and spend 12 lives or fewer.
+
+### Evolution and super powers
+
+Cats earn experience in their current job and evolve. Select an evolved cat and press **Q** (or the ★ button) for its super power.
+
+| Job | Evolves into | Bonus | Super power |
+|---|---|---|---|
+| Builder (35 s of work) | Master Builder | Builds and repairs 2× faster | **Fortify**: finishes nearby building work and shields those buildings for 25 s |
+| Scrapper (6 wizards) | Alley Champion | +50% damage, inspires nearby Scrappers | **Whirlwind**: hits every nearby wizard and knocks them back |
+| Tinker (40 research points) | Grand Inventor | Researches 2× faster | **Mech-Mice**: four clockwork mice hunt wizards and explode |
+| Tabby (5 kittens) | Queen Mum | Her bed breeds 40% faster | **Purr of Courage**: heals and wakes nearby cats; they can't be scared for 12 s |
+
+Evolution is kept per job, so a cat that changes jobs gets its title back when it returns.
+
+### Inventions
+
+Nine inventions in three branches. Each tier needs the one before it, and each level offers a subset.
+
+- **Traps:** Yarn Tripwire (Y) → Mousetrap Springboard (G), which flings a wizard back over the stream → Catnip Bomb (C)
+- **Weapons:** Hairball Spitter → Sardine Catapult (T), a buildable turret → Laser Pointer (L), which bounces spells back at the caster
+- **Utility:** Cat Flap Kit (scared Builders and Tinkers hide in beds) → Umbrella Glider (long tosses, even over water) → Clockwork Mouse (K), which lures apprentices
+
+For testing, `?level=3` opens a level directly and `?unlock=all` unlocks every level.
 
 ## Tech
 
