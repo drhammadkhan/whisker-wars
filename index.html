@@ -150,7 +150,7 @@ html.touch .card>p:not(.kicker):not(.goal),html.touch .card>ul{order:2}
         <p>Across the stream, two wizard towers are recruiting apprentices to collect the cats of Mothwick as familiars. You have about three minutes before the first raid.</p>
         <ul>
           <li><b>Drag a cat</b> to pick it up. Drop it on a <b>Dojo</b> (Scrapper), a <b>Workshop</b> (Tinker) or a <b>bed</b> (Tabby). <span class="m-only">Or click a cat and press <b>1–4</b>.</span><span class="t-only">Or tap a cat and pick a job at the bottom.</span></li>
-          <li><b><span class="m-only">Click</span><span class="t-only">Tap</span> a bed</b> to pull a cat out. Tabbies in beds breed kittens.</li>
+          <li><b><span class="m-only">Click</span><span class="t-only">Tap</span> a bed</b> to pull a cat out. Tabbies in beds breed kittens. <b><span class="m-only">Double-click</span><span class="t-only">Double-tap</span> a bed</b> to upgrade it.</li>
           <li><b>Watch for glowing runes.</b> A wizard's spell lands where the rune is. Drag a cat out of it to dodge. Hitting a wizard mid-cast can make it fizzle.</li>
           <li>Cats working alone get scared of wizards. <b>Scrappers protect them</b>, fight better in packs, and rank up as they win.</li>
           <li class="m-only">Drag empty ground or use WASD to look around. Scroll or pinch to zoom.</li>
@@ -2290,7 +2290,7 @@ function cssK() { return VW / (cv.getBoundingClientRect().width || VW); }
 function catAt(p, rad = 30) { let best = null, bd = rad; for (const c of G.cats) { if (c.state === 'inBed' || c.state === 'hide' || c.state === 'frog' || c.state === 'flying') continue; const d = Math.hypot(c.x + 4 - p.x, c.y - 20 - p.y); if (d < bd) { bd = d; best = c; } } return best; }
 function bldAt(p, pad = 18) { for (const b of G.blds) { if (Math.hypot(b.x - p.x, (b.y - 24) - p.y) < b.r + pad) return b; } return null; }
 const pointers = new Map();
-let down = null, samples = [], pan = null, pinch = null, miniDrag = false, keyShift = false, lift = 0, tapMax = 6, ghostDrag = null;
+let tapBed = null, fromBed = false, down = null, samples = [], pan = null, pinch = null, miniDrag = false, keyShift = false, lift = 0, tapMax = 6, ghostDrag = null;
 cv.addEventListener('contextmenu', e => { e.preventDefault(); setTool(null); });
 cv.addEventListener('wheel', e => {
   e.preventDefault(); const s = toScreen(e), before = toWorldS(s);
@@ -2322,8 +2322,19 @@ cv.addEventListener('pointerdown', e => {
     }
     useTool(p, e.shiftKey); return;
   }
-  let c = catAt(p, touch ? Math.max(30, 30 * k / cam.z) : 30);
-  if (!c) { const b = bldAt(p, touch ? Math.max(18, 14 * k / cam.z) : 18); if (b && b.type === 'bed' && b.occ.length) { c = b.occ[b.occ.length - 1]; leaveBed(c); } }
+  // Double-tap (or double-click) a finished bed to queue its upgrade. The first tap pulled a cat out, so put it back.
+  const bed = bldAt(p, touch ? Math.max(18, 14 * k / cam.z) : 18), lt = G.lastBedTap;
+  tapBed = bed && bed.type === 'bed' && bed.done ? bed : null;
+  if (tapBed && lt && lt.b === tapBed && performance.now() - lt.t < 450) {
+    G.lastBedTap = null; tapBed = null;
+    const lc = lt.c; if (lc && G.cats.includes(lc) && lc.state === 'idle' && lc.role === 'tabby' && roomIn(bed)) enterBed(lc, bed);
+    queueUpgrade(bed); hud(); return;
+  }
+  // a tap right on the bed body counts as a bed tap, even with cats standing close by
+  const onBed = tapBed && Math.hypot(tapBed.x - p.x, tapBed.y - 24 - p.y) < tapBed.r + 4;
+  let c = onBed ? null : catAt(p, touch ? Math.max(30, 30 * k / cam.z) : 30); fromBed = false;
+  if (c) tapBed = null;
+  else if (bed && bed.type === 'bed' && bed.occ.length) { c = bed.occ[bed.occ.length - 1]; leaveBed(c); fromBed = true; }
   if (c) {
     c.prev = c.state === 'swap' ? 'swap' : 'idle'; c.state = 'held'; c.stun = 0; G.held = c; G.sel = c; c.scared = 0;
     const q = toWorldS({ x: s.x, y: s.y - lift }); c.x = q.x; c.y = q.y + 20;
@@ -2360,14 +2371,15 @@ function release(e) {
   if (e.pointerType === 'touch') G.sx = -99;
   if (miniDrag) { miniDrag = false; return; }
   if (ghostDrag) { ghostDrag = null; syncBar(); return; }
-  if (pan) { if (!pan.moved) { G.sel = null; hud(); } pan = null; return; }
+  if (pan) { if (!pan.moved) { G.sel = null; hud(); G.lastBedTap = tapBed ? { b: tapBed, t: performance.now(), c: null } : null; } pan = null; return; }
   const c = G.held; if (!c) return; G.held = null;
   const s = toScreen(e), p = toWorldS({ x: s.x, y: s.y - lift }), now = performance.now();
   const s0 = samples[0] || { x: p.x, y: p.y, t: now }, dtm = Math.max(16, now - s0.t);
   const vx = (p.x - s0.x) / dtm * 1000, vy = (p.y - s0.y) / dtm * 1000, spd = Math.hypot(vx, vy);
   const moved = down ? Math.hypot(s.x - down.x, s.y - down.y) : 99;
   c.state = c.prev === 'swap' ? 'swap' : 'idle'; c.ax = c.x; c.ay = c.y; c.idleFor = 0; c.linger = 1.5;
-  if (moved < tapMax) { G.sel = c; hud(); sfx('select'); return; }
+  if (moved < tapMax) { G.sel = c; hud(); sfx('select'); G.lastBedTap = tapBed ? { b: tapBed, t: performance.now(), c: fromBed ? c : null } : null; return; }
+  G.lastBedTap = null;
   if (spd > 1100 && now - samples[samples.length - 1].t < 60) {
     const gl = !!G.done.glider, m = gl ? .6 : .32, k = Math.min(1, (gl ? 840 : 420) / (spd * m)); // Umbrella Glider: twice the range
     c.state = 'flying'; c.ft = 0; c.fdur = gl ? .95 : .5; c.glide = gl; c.fx0 = c.x; c.fy0 = c.y; c.face = vx < 0 ? -1 : 1;
@@ -2385,6 +2397,12 @@ function release(e) {
 cv.addEventListener('pointerup', release);
 cv.addEventListener('pointercancel', release);
 
+function queueUpgrade(b) {
+  if (b.tier >= 2) { say('That Cat Tree is already fully upgraded.'); return; }
+  if (b.upgWant) { say('That upgrade is already queued.'); return; }
+  b.upgWant = true; sfx('place', b.x, b.y); float(b.x, b.y - 80, 'Upgrade queued', '#d4c6ff');
+  say(G.cats.some(c => c.role === 'builder') ? 'Upgrade queued: ' + BED_NAME[b.tier] + ' → ' + BED_NAME[b.tier + 1] + '. A Builder is on the way.' : 'Upgrade queued. It needs a Builder.');
+}
 function useTool(p, shift) {
   const t = G.tool;
   if (BUILD_R[t]) {
@@ -2396,10 +2414,7 @@ function useTool(p, shift) {
   } else if (t === 'upgrade') {
     const b = bldAt(p);
     if (!b || b.type !== 'bed' || !b.done) { say(tx('Click', 'Tap') + ' a finished cat bed to upgrade it.'); return; }
-    if (b.tier >= 2) { say('That Cat Tree is already fully upgraded.'); return; }
-    b.upgWant = true; sfx('place', b.x, b.y); float(b.x, b.y - 80, 'Upgrade queued', '#d4c6ff');
-    if (!G.cats.some(c => c.role === 'builder')) say('Upgrade queued. It needs a Builder.');
-    setTool(null);
+    queueUpgrade(b); setTool(null);
   } else if (t === 'yarn' || t === 'spring' || t === 'mouse' || t === 'laser') {
     if (G.tray[t] <= 0) { setTool(null); return; }
     if (t !== 'laser' && inWater(p.x, p.y)) { say('That would float away. Place it on land.'); return; }
@@ -2481,7 +2496,7 @@ function refreshHint() {
     bed: 'Tap open ground on the village side to move the Cardboard Box, drag to nudge it, then press Place.',
     dojo: 'Tap where the Dojo should go, drag to nudge it, then press Place. Drop cats on it to make Scrappers.',
     workshop: 'Tap where the Junk Workshop should go, then press Place. Drop cats on it to make Tinkers.',
-    upgrade: 'Tap a cat bed to queue an upgrade: Box → Basket Nook → Cat Tree.',
+    upgrade: 'Tap a cat bed to queue an upgrade: Box → Basket Nook → Cat Tree. Tip: you can also double-tap any bed.',
     yarn: 'Tap where to hide the Yarn Tripwire, then press Hide trap. The first wizard to step on it is tangled for 5 s.',
     catnip: 'Tap to aim the Catnip Bomb, then press Burst! Wizards inside the circle are dazed and hurt.',
     catapult: 'Tap where the Sardine Catapult should go, then press Place. It lobs tins at wizards inside the dashed circle.',
@@ -2503,7 +2518,7 @@ function refreshHint() {
   if (G.tool) { hint.textContent = tips[G.tool] + tx(' Right-click or Esc to cancel.', ''); return; }
   const n = G.cats.length, cap = colonyCap();
   if (!G.cats.some(c => c.role === 'builder')) hint.textContent = tx('Tip: click the basket to pull a cat out, then press 2 to make it a Builder.', 'Tip: tap the basket to pull a cat out, then tap Builder to give it the job.');
-  else if (n >= cap) hint.textContent = 'Your beds are full, so breeding has stopped. Build another Cardboard Box or upgrade a bed.';
+  else if (n >= cap) hint.textContent = tx('Your beds are full, so breeding has stopped. Build another Cardboard Box, or double-click a bed to upgrade it.', 'Your beds are full, so breeding has stopped. Build another Box, or double-tap a bed to upgrade it.');
   else if (!G.blds.some(b => b.type === 'dojo')) hint.textContent = tx('Tip: build a Dojo (F).', 'Tip: build a Dojo.') + ' Scrappers protect working cats and fight better in packs of three.';
   else if (!G.blds.some(b => b.type === 'workshop')) hint.textContent = tx('Tip: a Junk Workshop (R)', 'Tip: a Junk Workshop') + ' lets Tinkers research traps and gadgets.';
   else if (G.strays.length) hint.textContent = 'Stray cats (?) are waiting around the map. Walk any cat to one to recruit it.';

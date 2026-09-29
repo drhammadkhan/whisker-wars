@@ -7,7 +7,7 @@ A playable browser prototype of **Whisker Wars**, a real-time god-strategy game 
 ## How to play
 
 - **Drag a cat** to pick it up. Drop it on a Dojo to make a Scrapper, on a Junk Workshop for a Tinker, or on a bed for a Tabby. You can also click a cat and press **1–4**.
-- **Click a bed** to pull a cat out. Two or more Tabbies in a bed breed kittens.
+- **Click a bed** to pull a cat out. Two or more Tabbies in a bed breed kittens. **Double-click a bed** to upgrade it.
 - **Builders** build what you place from the Build menu (B Box, F Dojo, R Workshop, U Upgrade).
 - **Tinkers** research gadgets: Yarn Tripwire (Y), Hairball Spitter and Catnip Bomb (C).
 - **Watch for glowing runes.** A wizard's spell lands on its rune, so drag cats out of the rune to dodge it.
@@ -22,6 +22,7 @@ On a touchscreen the game fills the screen, and a bar along the bottom holds the
 
 - **Tap a cat**, then tap a job (Tabby, Builder, Scrapper, Tinker) in the bar. Dragging a cat lifts it above your finger so you can see where you're dropping it.
 - **To build**, tap Box, Dojo or Workshop, tap where it should go (drag to nudge it), then press **Place**. **Keep placing** lets you place several, and **Cancel** stops.
+- **Double-tap a bed** to queue its upgrade (Box → Basket Nook → Cat Tree). A Builder does the work.
 - **Orders** opens research, bed upgrades, speed, restart and full screen.
 - Drag empty ground to look around. Pinch with two fingers to zoom and pan.
 - The game pauses itself when you switch apps. On iPhone, use **Share → Add to Home Screen** to play full screen.
