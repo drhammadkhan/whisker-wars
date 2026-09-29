@@ -2619,6 +2619,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && !G.
 /* ================= campaign ================= */
 // Progress (unlocked levels, best stars) lives in localStorage; ?unlock=all opens every level for testing.
 const TUTORIAL = document.querySelector('#card ul').innerHTML;
+const BUILD = 'build 7 · 29 Sep 2026'; // shown on the level card so players can tell which version they have
 const PROG = { unlocked: 1, stars: [] };
 try { Object.assign(PROG, JSON.parse(localStorage.getItem('ww-progress') || '{}')); } catch (_) {}
 if (/[?&]unlock=all\b/.test(location.search)) PROG.unlocked = LEVELS.length;
@@ -2635,7 +2636,7 @@ function showLevelCard() {
   $('card').innerHTML = `<p class="kicker">Level ${LV + 1} of ${LEVELS.length}</p><h2>${L.name}</h2><p>${L.blurb}</p>
     <ul>${LV === 0 ? TUTORIAL : L.news.map(n => `<li>${n}</li>`).join('')}</ul>
     <p class="goal">Goal: ${L.goalText}.</p>${levelStrip()}
-    <div class="row"><button class="go" id="startBtn" data-act="start">Start level</button></div>`;
+    <div class="row"><button class="go" id="startBtn" data-act="start">Start level</button><span class="note">${BUILD}</span></div>`;
   overlay.hidden = false; G.paused = true; setTool(null); hud();
 }
 function switchLevel(i) {
@@ -2652,7 +2653,8 @@ $('card').addEventListener('click', e => {
   else if (act === 'lvl' && +b.dataset.lv !== LV) switchLevel(+b.dataset.lv);
 });
 function end(win, why) {
-  if (G.over) return; G.over = win ? 'win' : 'lose'; G.paused = true; G.held = null; setTool(null); sfx(win ? 'win' : 'lose');
+  if (G.over) return; G.over = win ? 'win' : 'lose'; G.paused = true; sfx(win ? 'win' : 'lose');
+  if (G.held) dropHeldInPlace(); setTool(null); setSheet(false); // an open Orders panel would cover the card
   const st = G.stats, stars = win ? 1 + (G.t < LEVEL.par ? 1 : 0) + (st.livesLost <= 12 ? 1 : 0) : 0;
   const last = LV === LEVELS.length - 1, stats = `Kittens born: ${st.born} · wizards poofed: ${st.wizDown} · spells dodged: ${st.dodged} · lives spent: ${st.livesLost} · cats evolved: ${st.evolved || 0}`;
   if (win) { PROG.stars[LV] = Math.max(PROG.stars[LV] || 0, stars); PROG.unlocked = Math.max(PROG.unlocked, Math.min(LEVELS.length, LV + 2)); saveProg(); }
